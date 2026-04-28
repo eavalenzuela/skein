@@ -82,9 +82,9 @@ The most consequential decision. Markdown files on disk as the source of truth +
 
 **Context modes** (selectable per-conversation, default in bold):
 
-- *Current note only* — narrow scope, cheap.
-- ***Current note + top-K related chunks via vector search (RAG)*** — default. Earns the chunked embeddings their keep.
-- *Whole vault* — power users; burns tokens but answers cross-cutting questions.
+- _Current note only_ — narrow scope, cheap.
+- **_Current note + top-K related chunks via vector search (RAG)_** — default. Earns the chunked embeddings their keep.
+- _Whole vault_ — power users; burns tokens but answers cross-cutting questions.
 
 **RAG parameters:**
 
@@ -143,14 +143,14 @@ The canonical visual reference is the mockup bundle at `design/mockups/Skein Moc
 
 1. **Populated · split view · dark** — two pages pinned (left + right) on the desk, full bookshelf, chat sidebar open with an in-progress conversation.
 2. **Drag-to-insert · mid-drag** — chat sentence selected (blue text-selection), drag preview floating near the cursor with an `↳ insert at caret` ribbon, accent-amber caret indicator showing the insertion point in the open page.
-3. **Empty state · loose pages on the desk** — no tabs open, scattered page-cards (slightly rotated, varied positions) over a soft radial vignette, with the hint "*The desk is clear.* Open a book from the shelf, or pick a loose page below."
+3. **Empty state · loose pages on the desk** — no tabs open, scattered page-cards (slightly rotated, varied positions) over a soft radial vignette, with the hint "_The desk is clear._ Open a book from the shelf, or pick a loose page below."
 
 **Locked aesthetic decisions:**
 
 - **Platform chrome:** GNOME-style headerbar (close button on the right, traffic lights hidden). Same component on Windows.
 - **Default theme:** dark (warm graphite paper, umber wood). Light theme (cream paper, oak wood) is a first-class equal, toggled in settings.
 - **Shelf realism:** **suggestive** — soft wood gradient with flat spines and a thin colored cloth band. Abstract (chrome bar) and tactile (planked wood, deeper shadow) are available as settings, but suggestive is the default.
-- **Folio:** stack of papers tied with twine, sitting at the *start* of the shelf (first slot, before the first book).
+- **Folio:** stack of papers tied with twine, sitting at the _start_ of the shelf (first slot, before the first book).
 - **Spine treatment:** varied heights (74–84px), warm-wood backgrounds shifted by hue, a thin cloth-bound color band ~14px tall placed near the top, vertical title rendered below the band in `Source Serif 4`, uppercase, letter-spaced.
 - **Cloth-band palette:** six muted hues sharing chroma 0.06–0.09 — terracotta, moss, slate, ochre, oxblood, dusty teal. Rotated across books deterministically (e.g. by title hash) so reordering doesn't reshuffle colors.
 - **Active book affordance:** spine pulled forward (translateY −6px) with a soft amber glow.
@@ -232,7 +232,7 @@ The mockup also exposes a "Scenario" tweak (populated / dragging / empty) — th
 
 - **Obsidian** — point the app at the vault folder, copy-or-link, run the indexer. Frontmatter and `[[wikilinks]]` are already compatible.
 - **Plain folder of markdown** — pick any folder; subdirectories become books, top-level `.md` files become loose pages. Covers random `.md` dumps and exports from tools we don't explicitly support.
-- **OneNote** — *not in v1.* See note below.
+- **OneNote** — _not in v1._ See note below.
 - Notion, Bear, etc. — deferred to v2+.
 
 **Import collision handling:**
