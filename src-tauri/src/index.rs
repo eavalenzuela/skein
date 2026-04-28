@@ -170,6 +170,18 @@ impl Index {
         Ok(())
     }
 
+    pub fn all_tags(&self) -> Result<Vec<String>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT DISTINCT tag FROM tags ORDER BY tag COLLATE NOCASE")?;
+        let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        Ok(out)
+    }
+
     pub fn delete_all(&mut self) -> Result<()> {
         self.conn.execute_batch(
             "DELETE FROM pages; DELETE FROM tags; DELETE FROM embeddings; \

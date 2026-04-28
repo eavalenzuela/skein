@@ -1,3 +1,4 @@
+mod autotag;
 mod chat;
 mod chunker;
 mod commands;
@@ -42,6 +43,8 @@ pub fn run() {
             commands::set_secret,
             commands::clear_secret,
             commands::chat_send,
+            commands::suggest_tags,
+            commands::apply_tag,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

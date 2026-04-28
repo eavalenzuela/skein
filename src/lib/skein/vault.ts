@@ -63,3 +63,7 @@ export const embeddingModelStatus = () => invoke<EmbeddingModelStatus>("embeddin
 
 export const downloadEmbeddingModel = () =>
   invoke<EmbeddingModelStatus>("download_embedding_model");
+
+export const suggestTags = (relPath: string) => invoke<string[]>("suggest_tags", { relPath });
+export const applyTag = (relPath: string, tag: string) =>
+  invoke<void>("apply_tag", { relPath, tag });

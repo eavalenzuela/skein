@@ -4,6 +4,7 @@ use std::sync::Arc;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 
+use crate::autotag;
 use crate::chat::{self, ChatMessageIn};
 use crate::embedder::{self, OnnxBgeEmbedder, SharedEmbedder};
 use crate::index::{self, Index, RelatedHit, SearchHit};
@@ -251,6 +252,41 @@ pub fn set_secret(name: String, value: String) -> Result<(), String> {
 #[tauri::command]
 pub fn clear_secret(name: String) -> Result<(), String> {
     secrets::clear(&name).map_err(err)
+}
+
+#[tauri::command]
+pub async fn suggest_tags(
+    rel_path: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<String>, String> {
+    let api_key =
+        secrets::read("anthropic_api_key").ok_or_else(|| "no Anthropic API key set".to_string())?;
+    let vault = state.vault().ok_or("no vault open")?;
+    let body = vault::read_page_body(&vault, &rel_path).map_err(err)?;
+    let title = vault::read_page_data(&vault, &vault.root.join(&rel_path))
+        .map(|d| d.title)
+        .unwrap_or_else(|| rel_path.clone());
+    let existing = match state.index.lock().as_ref() {
+        Some(idx) => idx.all_tags().unwrap_or_default(),
+        None => vec![],
+    };
+    autotag::suggest_tags(&api_key, &title, &body, &existing)
+        .await
+        .map_err(err)
+}
+
+#[tauri::command]
+pub fn apply_tag(rel_path: String, tag: String, state: State<'_, AppState>) -> Result<(), String> {
+    let vault = state.vault().ok_or("no vault open")?;
+    let body = vault::read_page_body(&vault, &rel_path).map_err(err)?;
+    let new_body = autotag::add_tag_to_body(&body, &tag).map_err(err)?;
+    vault::write_page_body(&vault, &rel_path, &new_body).map_err(err)?;
+    if let Some(data) = vault::read_page_data(&vault, &vault.root.join(&rel_path)) {
+        if let Some(idx) = state.index.lock().as_mut() {
+            let _ = idx.upsert_page(&data);
+        }
+    }
+    Ok(())
 }
 
 #[tauri::command]

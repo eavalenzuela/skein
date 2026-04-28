@@ -2,6 +2,7 @@
   import type { Tab } from "../tabs.svelte.js";
   import { setBody } from "../tabs.svelte.js";
   import Editor from "../editor/Editor.svelte";
+  import TagChips from "./TagChips.svelte";
 
   interface Props {
     tab: Tab;
@@ -13,6 +14,7 @@
   {#if tab.loading}
     <div class="loading">Loading…</div>
   {:else}
+    <TagChips {tab} />
     <Editor doc={tab.body} onChange={(next) => setBody(tab.rel_path, next)} />
   {/if}
 </div>
