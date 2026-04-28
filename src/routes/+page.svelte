@@ -1,44 +1,36 @@
 <script lang="ts">
-  // Phase 0 placeholder. The full SkeinWindow shell lands in Phase 1
-  // (port of design/mockups/skein-app.jsx to Svelte components).
+  import SkeinWindow from "$lib/skein/SkeinWindow.svelte";
+  import DevControls from "$lib/skein/DevControls.svelte";
+  import { tweaks } from "$lib/skein/tweaks.svelte.js";
 </script>
 
-<main>
-  <h1>Skein</h1>
-  <p class="muted">Phase 0 — bootstrap. UI shell lands in Phase 1.</p>
-</main>
+<div class="app-frame">
+  <SkeinWindow
+    theme={tweaks.theme}
+    shelfStyle={tweaks.shelfStyle}
+    sidebar={tweaks.sidebar}
+    scenario={tweaks.scenario}
+    pageFont={tweaks.pageFont}
+    vault="Field Notes"
+  />
+</div>
+
+<DevControls />
 
 <style>
-  main {
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    background: #f0eee9;
-    color: #222;
-    font-family: "Inter", system-ui, sans-serif;
-  }
-  h1 {
-    font-family: "Source Serif 4", Georgia, serif;
-    font-weight: 600;
+  :global(html, body) {
     margin: 0;
-    font-size: 2.4rem;
-    letter-spacing: -0.01em;
+    padding: 0;
+    height: 100%;
+    background: #1a1a1c;
+    overflow: hidden;
   }
-  .muted {
-    color: #888;
-    font-size: 0.95rem;
-    margin: 0;
+  :global(*) {
+    box-sizing: border-box;
   }
-  @media (prefers-color-scheme: dark) {
-    main {
-      background: #1a1a1c;
-      color: #e8e6df;
-    }
-    .muted {
-      color: #888;
-    }
+  .app-frame {
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
   }
 </style>
