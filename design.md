@@ -135,6 +135,66 @@ The window is divided into four regions:
 - Visual affordance during drag: cursor changes, editor shows an insertion indicator at the current caret.
 - With split view, the drop target is whichever pane the cursor hovers over on release.
 
+### Visual design system (locked)
+
+The canonical visual reference is the mockup bundle at `design/mockups/Skein Mockups.html` (and the JSX components it loads). Implementation must match these mockups pixel-faithfully; the Tauri/Svelte port should treat the JSX as a spec, not a structure to clone.
+
+**Headline mockups** in the bundle:
+
+1. **Populated · split view · dark** — two pages pinned (left + right) on the desk, full bookshelf, chat sidebar open with an in-progress conversation.
+2. **Drag-to-insert · mid-drag** — chat sentence selected (blue text-selection), drag preview floating near the cursor with an `↳ insert at caret` ribbon, accent-amber caret indicator showing the insertion point in the open page.
+3. **Empty state · loose pages on the desk** — no tabs open, scattered page-cards (slightly rotated, varied positions) over a soft radial vignette, with the hint "*The desk is clear.* Open a book from the shelf, or pick a loose page below."
+
+**Locked aesthetic decisions:**
+
+- **Platform chrome:** GNOME-style headerbar (close button on the right, traffic lights hidden). Same component on Windows.
+- **Default theme:** dark (warm graphite paper, umber wood). Light theme (cream paper, oak wood) is a first-class equal, toggled in settings.
+- **Shelf realism:** **suggestive** — soft wood gradient with flat spines and a thin colored cloth band. Abstract (chrome bar) and tactile (planked wood, deeper shadow) are available as settings, but suggestive is the default.
+- **Folio:** stack of papers tied with twine, sitting at the *start* of the shelf (first slot, before the first book).
+- **Spine treatment:** varied heights (74–84px), warm-wood backgrounds shifted by hue, a thin cloth-bound color band ~14px tall placed near the top, vertical title rendered below the band in `Source Serif 4`, uppercase, letter-spaced.
+- **Cloth-band palette:** six muted hues sharing chroma 0.06–0.09 — terracotta, moss, slate, ochre, oxblood, dusty teal. Rotated across books deterministically (e.g. by title hash) so reordering doesn't reshuffle colors.
+- **Active book affordance:** spine pulled forward (translateY −6px) with a soft amber glow.
+
+**Type pairing:**
+
+- **UI chrome:** Inter (400/500/600/700). Screen-tuned, clean.
+- **Page content:** Source Serif 4 (modern literary serif, screen-optimized) by default. Settings let users swap to Iowan Old Style, Spectral, or Lora.
+- **Code / monospace:** JetBrains Mono.
+
+**Color tokens** (paste these verbatim into the Svelte port; full definitions in `design/mockups/skein-app.jsx`, top of `SKEIN_CSS`):
+
+- Wood: `--wood-1`, `--wood-2`, `--wood-3`, `--wood-edge`, `--wood-shadow`.
+- Paper / page: `--paper`, `--paper-2`, `--page`, `--page-edge`.
+- Ink: `--ink`, `--ink-2`, `--ink-3`, `--ink-4` (descending emphasis).
+- Chrome: `--chrome`, `--chrome-2`, `--chrome-edge`, `--chrome-ink`, `--chrome-ink-2`.
+- Accent (warm amber, used sparingly): `--accent`, `--accent-soft`, `--accent-edge`.
+- Chat bubbles: `--user-msg`, `--asst-msg`.
+- Page shadow: `--shadow-page`.
+
+**Dimension constants** (also from the bundle CSS):
+
+- Window: 1480×920 reference artboards. App scales fluidly; these are the design canvas size.
+- Titlebar: 38px tall.
+- Sidebar (open): 340px wide. Collapsed: 36px. Hidden: 0.
+- Tabs row: 34px tall, max tab width 200px.
+- Shelf: rows 92px tall with an 18px gap and a planked plinth between/below each row. Two visible rows by default; vertical scroll reveals more.
+- Spine: ~28px wide (22px in narrow mode), 74–84px tall.
+- Folio: 38×80px.
+- Empty-state cards: 200×132px, with a `-webkit-line-clamp: 5` body and a meta footer (tag + age).
+
+**Component inventory** (Svelte components to mirror the JSX):
+
+`Titlebar` · `Bookshelf` · `Spine` · `Folio` · `Desk` · `Tabs` · `Tab` · `Page` (with `live-preview` editor inside) · `EmptyDesk` (cards) · `Sidebar` (open / collapsed / hidden) · `ChatHeader` · `ChatLog` · `ChatMessage` · `ChatInput` · `DragOverlay` (drag-preview + cursor icon) · `Caret` (regular blink + accent insert).
+
+**Settings-exposed tweaks** (mirroring the design's Tweaks panel):
+
+- Theme: dark / light.
+- Shelf realism: abstract / suggestive / tactile.
+- Sidebar: open / collapsed / hidden.
+- Page font: Source Serif 4 / Iowan Old Style / Spectral / Lora.
+
+The mockup also exposes a "Scenario" tweak (populated / dragging / empty) — that is for design preview only; the app derives the live state from real vault contents and user interaction.
+
 ## Features that compound well
 
 **In v1:**
@@ -193,6 +253,151 @@ The window is divided into four regions:
 ## Naming
 
 **Skein** — a coil of yarn. Tactile, unusual, evokes the threaded/woven nature of an interlinked note vault. Short, pronounceable, memorable.
+
+## Implementation plan
+
+A phased build, each phase ending in something runnable. Phases land in order; later phases assume the earlier ones. Each phase should ship behind a real demo: open the app, click around, see the new capability work end-to-end.
+
+### Phase 0 — Bootstrap
+
+- Tauri 2.x project (Rust backend) + Svelte 5 + Vite + TypeScript front-end.
+- Workspace layout: `src-tauri/` (Rust), `src/` (Svelte/TS), `design/` (mockups + this doc), `docs/` (user-facing later).
+- Tooling: `cargo fmt` + `clippy`, `prettier` + `eslint` for TS/Svelte, `pnpm` (or `npm`) for JS deps. Pre-commit hooks via `lefthook` or similar.
+- License: MIT (`LICENSE` + SPDX headers in source files).
+- README skeleton describing what Skein is and how to run it locally.
+- CI: GitHub Actions building debug bundles for **Linux (Ubuntu 22.04+)** and **Windows (windows-latest)** on push and PR. No release artifacts yet.
+- Acceptance: `pnpm tauri dev` opens an empty Tauri window on both platforms.
+
+### Phase 1 — UI shell (visual mockup, no real data)
+
+- Port `design/mockups/skein-app.jsx` to Svelte components, matching the locked visual design system above pixel-faithfully.
+- All four regions: Titlebar, Bookshelf (suggestive style by default), Desk (with tabs + split view), Sidebar (open/collapsed/hidden modes).
+- All three scenarios reachable via a temporary dev menu: populated split, drag-to-insert mid-state, empty desk with cards.
+- Theme toggle (dark / light) wired to a Svelte store. Page font selectable.
+- Mock data only — no filesystem reads yet. Books, pages, chat, cards are hardcoded fixtures.
+- Acceptance: side-by-side comparison with the mockup bundle shows no visible drift.
+
+### Phase 2 — Vault model + filesystem layer
+
+- Settings flow: pick a vault folder on first run, persist the path.
+- Rust scanner walks the vault: top-level dir = vault root; sub-dirs = books; `.md` files = pages. Top-level `.md` files become loose pages (Folio).
+- YAML frontmatter parser (`serde_yaml` or `gray_matter`).
+- Reactive file watcher (`notify` crate) → debounced (~500ms) → emit IPC events to the front-end on create / modify / delete.
+- Tauri commands: `list_books`, `list_pages`, `read_page`, `write_page`, `create_page`, `delete_page`, `create_book`, `move_page`.
+- Bookshelf and tabs now render real vault contents. Pages open as read-only previews.
+- Acceptance: create a folder of `.md` files outside the app; opening it as a vault populates the bookshelf, and edits made in another editor reflect live.
+
+### Phase 3 — Editor (CodeMirror 6 + live preview)
+
+- CodeMirror 6 integrated as a Svelte component, one editor instance per open tab.
+- Markdown language pack, Obsidian-style live-preview overlay (raw markdown around the cursor; rendered output everywhere else).
+- Wire to the filesystem layer: load on tab open, save on debounced change (~750ms after last keystroke), also save on tab close / blur.
+- Dirty indicator on tabs (the `.dirty` dot in the mockup).
+- Pin-to-left / pin-to-right tab actions; max two panes shown.
+- Acceptance: edit a note in-app, alt-tab to a terminal, see the file content updated. Vice versa.
+
+### Phase 4 — Indexing (FTS5)
+
+- SQLite database in OS app data dir (`~/.local/share/skein/index.db` on Linux, `%APPDATA%\skein\index.db` on Windows). Disposable.
+- Schema: `pages` (path, hash, title, frontmatter JSON, mtime), `tags`, `links`, `pages_fts` (FTS5 virtual table).
+- Initial scan on vault open; incremental updates from the file watcher.
+- Search command palette in the titlebar (`Ctrl+P`-style, or click the search icon).
+- Acceptance: type in the search bar, results stream in; FTS matches highlighted.
+
+### Phase 5 — Embeddings + related notes
+
+- Bundle ONNX runtime + **BGE-small-en-v1.5** model (~130MB) shipped with the app.
+- Section-based chunker (split on `#`/`##`/`###`; soft cap ~500 tokens per chunk; further-split overlong sections at paragraph boundaries).
+- `sqlite-vec` extension loaded into the SQLite DB. `vectors` table keyed by content hash, stores chunk vectors + page-level vector (mean of chunks).
+- Reindex flow: on page write, hash content; if hash unchanged, skip; else re-chunk, re-embed, replace vectors.
+- Settings toggle for **Voyage** as a remote backend (uses key from keychain, see Phase 7). Switching backends triggers a full reindex with the new dimensionality.
+- Related-notes pane next to the editor: top-K cosine matches refreshed on save.
+- Acceptance: open a note, see semantically related notes in the sidebar; edit and save, list updates.
+
+### Phase 6 — Settings + secrets
+
+- Settings page UI: vault path, theme, shelf style, sidebar default, page font, embeddings backend, API keys (Anthropic, Voyage).
+- API keys stored via the OS keychain (`keyring` crate: libsecret on Linux, Windows Credential Manager on Windows). Never written to plaintext config.
+- Non-secret config in a TOML file at the OS config dir.
+- Acceptance: keys set in settings persist across restarts and aren't visible in any plaintext file.
+
+### Phase 7 — Claude chat sidebar
+
+- Anthropic SDK (Rust client or HTTP via `reqwest`) with **prompt caching** on the system prompt + retrieved context block.
+- Three context modes: current note, current + RAG (top-8 chunks vault-wide), whole vault.
+- Streaming responses rendered token-by-token in the chat panel.
+- Model picker pill (Haiku 4.5 default; Sonnet 4.6 / Opus 4.7 selectable, per-conversation).
+- **Drag-to-insert**: chat-log selection + drag → drop on editor pane → text inserted at caret. Honor split view (drop target = pane under cursor on release).
+- Conversation persisted per-session in app data dir for resume; not part of the vault, not indexed.
+- Acceptance: ask a question grounded in vault content, drag a paragraph from the answer into a note.
+
+### Phase 8 — Auto-tagging
+
+- Debounced (~3s after last keystroke) call to **Claude Haiku** with a small prompt that includes the page body and the vault's existing tag list.
+- Returns 1–5 tag suggestions, shown as chips above the editor; click to accept (writes to frontmatter).
+- Disabled cleanly when no Anthropic key is set.
+- Acceptance: write a note about cooking, see `#recipes` and similar suggestions.
+
+### Phase 9 — Backlinks
+
+- `[[wikilink]]` parser + autocomplete on `[[` (uses page index from Phase 4).
+- "Linked from" panel on each page: live list of pages whose body contains a wikilink to this one.
+- Combined with Phase 5 in the side pane: explicit links above, implicit (embedding) related below.
+- Acceptance: type `[[`, autocomplete; visit the linked page, see the source listed under "Linked from".
+
+### Phase 10 — Daily notes + reminders
+
+- Daily-note creation: open today's daily page (creates from template if missing). Lives in a `Daily/` book by default; configurable.
+- Template editor in settings (frontmatter + body skeleton with `{{date}}`, `{{weekday}}` variables).
+- OS notifications via Tauri's notification API: configurable reminder times for daily notes; ad-hoc reminders attachable to any page.
+- Time-zone-aware date rollover.
+- Acceptance: schedule a 9am reminder, receive a native OS notification.
+
+### Phase 11 — Paste image
+
+- Clipboard-image handler in the editor: paste → save as `<hash>.<ext>` to the page's folder per the attachment rules → insert markdown ref at caret.
+- Drag-drop image files into the editor: same path.
+- Acceptance: paste a screenshot into a page; the file lands beside the page and renders in live preview.
+
+### Phase 12 — Backup / export / import
+
+- Export: zip vault directory + a content-hash-keyed embeddings sidecar (`.skein/vectors.db` inside the archive). One-click "Export Vault" in settings.
+- "Open Vault from Archive": pick `.zip`, choose destination, app unzips, loads the embeddings sidecar, kicks off background indexing for non-vector data.
+- Import: **Obsidian** (point at folder, no transformation needed) and **plain folder of markdown** (subdirs → books, top-level `.md` → loose pages). Collision: rename incoming with `(1)` suffix; per-file override in import dialog.
+- Acceptance: round-trip a vault through export → restore, on a fresh machine, with no re-embedding cost.
+
+### Phase 13 — Git sync
+
+- Embed `git2` (libgit2) for in-process git ops.
+- Settings: configure remote URL, auth (SSH key or token via keychain), choose branch.
+- Buttons: Pull, Push, Status. No auto-merge magic.
+- On conflicts: leave the file with conflict markers, surface conflicted files in a panel; user resolves in-editor.
+- Acceptance: connect to a remote, edit on machine A, pull on machine B, see the change.
+
+### Phase 14 — Polish + packaging
+
+- Linux: AppImage (primary), `.deb`, `.rpm`. Wayland + X11 tested on GNOME and KDE.
+- Windows: MSI via Tauri's WiX bundler.
+- Code signing: **defer** until we decide whether to publish (cost / certificate management). Builds will be unsigned during dev.
+- Auto-update: Tauri updater pointed at GitHub Releases.
+- Crash reporting: opt-in, local log to app data dir; remote reporting deferred.
+- Onboarding: first-run flow guides vault creation, optional API key setup.
+- Acceptance: a friend on stock Ubuntu and a friend on Windows 11 can install from a GitHub release and run through the daily-notes happy path without help.
+
+### Cross-cutting work (lands incrementally)
+
+- **Accessibility:** keyboard navigation through tabs, shelf, chat. Screen-reader labels on icon-only controls. Color contrast verified in both themes (target WCAG AA on UI chrome).
+- **Performance budgets:** indexing 10k pages should complete in < 2 minutes on a mid-range laptop; incremental updates < 100ms. Editor open-to-typeable < 250ms. Chat first-token < 1.5s when the cache is warm.
+- **Telemetry:** none in v1. The app is local-first and offline-capable; phone-home is opt-in only and deferred past v1.
+- **Testing:** Rust unit tests for the indexer/chunker/parser; Playwright (or WebDriver-via-Tauri) smoke tests for the major flows; visual regression tests against the Phase 1 mockup.
+
+### Out of plan (deferred features parked elsewhere in this doc)
+
+- Encryption at rest — separate design pass.
+- OneNote / Notion / Bear importers — v2.
+- Tool-use / agentic chat — v2 with an undo/safety story.
+- Global hotkey quick capture — owner doesn't want it.
+- Graph view / web clipper / voice notes — cut.
 
 ## Resolved decisions (v1)
 
