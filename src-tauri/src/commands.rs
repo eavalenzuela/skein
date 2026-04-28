@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use tauri::{AppHandle, Manager, Runtime, State};
 
-use crate::index::{self, Index, SearchHit};
+use crate::index::{self, Index, RelatedHit, SearchHit};
 use crate::settings::{self, Settings};
 use crate::state::AppState;
 use crate::vault::{self, Book, Page, Vault};
@@ -12,10 +12,13 @@ fn err<E: std::fmt::Display>(e: E) -> String {
     e.to_string()
 }
 
-fn open_or_init_index<R: Runtime>(app: &AppHandle<R>) -> Result<Index, String> {
+fn open_or_init_index<R: Runtime>(
+    app: &AppHandle<R>,
+    state: &State<'_, AppState>,
+) -> Result<Index, String> {
     let dir = app.path().app_data_dir().map_err(err)?;
     let path = index::db_path(&dir);
-    Index::open(&path).map_err(err)
+    Index::open(&path, state.embedder.clone()).map_err(err)
 }
 
 fn rebuild_index_for(idx: &mut Index, vault: &Vault) -> Result<(), String> {
@@ -35,7 +38,7 @@ fn install_vault<R: Runtime>(
     {
         let mut idx_slot = state.index.lock();
         if idx_slot.is_none() {
-            *idx_slot = Some(open_or_init_index(app)?);
+            *idx_slot = Some(open_or_init_index(app, state)?);
         }
         let idx = idx_slot
             .as_mut()
@@ -140,6 +143,20 @@ pub fn search_pages(
         .ok_or_else(|| "index not initialized".to_string())?;
     let limit = limit.unwrap_or(20).min(200) as usize;
     idx.search(&query, limit).map_err(err)
+}
+
+#[tauri::command]
+pub fn find_related(
+    rel_path: String,
+    limit: Option<u32>,
+    state: State<'_, AppState>,
+) -> Result<Vec<RelatedHit>, String> {
+    let mut idx_slot = state.index.lock();
+    let idx = idx_slot
+        .as_mut()
+        .ok_or_else(|| "index not initialized".to_string())?;
+    let limit = limit.unwrap_or(8).min(50) as usize;
+    idx.find_related(&rel_path, limit).map_err(err)
 }
 
 #[tauri::command]

@@ -1,4 +1,6 @@
+mod chunker;
 mod commands;
+mod embedder;
 mod index;
 mod settings;
 mod state;
@@ -26,6 +28,7 @@ pub fn run() {
             commands::read_page,
             commands::write_page,
             commands::search_pages,
+            commands::find_related,
             commands::rebuild_index,
         ])
         .run(tauri::generate_context!())

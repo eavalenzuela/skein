@@ -41,4 +41,15 @@ export interface SearchHit {
 export const searchPages = (query: string, limit?: number) =>
   invoke<SearchHit[]>("search_pages", { query, limit });
 
+export interface RelatedHit {
+  rel_path: string;
+  title: string;
+  book: string | null;
+  similarity: number;
+  snippet: string;
+}
+
+export const findRelated = (relPath: string, limit?: number) =>
+  invoke<RelatedHit[]>("find_related", { relPath, limit });
+
 export const rebuildIndex = () => invoke<number>("rebuild_index");

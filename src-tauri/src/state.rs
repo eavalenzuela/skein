@@ -2,20 +2,31 @@ use std::sync::Arc;
 
 use parking_lot::Mutex;
 
+use crate::embedder::{HashBagEmbedder, SharedEmbedder};
 use crate::index::Index;
 use crate::vault::Vault;
 use crate::watcher::DebouncerHandle;
 
-#[derive(Default)]
 pub struct AppState {
     inner: Arc<Mutex<Inner>>,
     pub index: Arc<Mutex<Option<Index>>>,
+    pub embedder: SharedEmbedder,
 }
 
 #[derive(Default)]
 struct Inner {
     vault: Option<Vault>,
     watcher: Option<DebouncerHandle>,
+}
+
+impl Default for AppState {
+    fn default() -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(Inner::default())),
+            index: Arc::new(Mutex::new(None)),
+            embedder: Arc::new(HashBagEmbedder::new()),
+        }
+    }
 }
 
 impl AppState {
@@ -25,7 +36,6 @@ impl AppState {
 
     pub fn install(&self, vault: Vault, watcher: DebouncerHandle) {
         let mut inner = self.inner.lock();
-        // Drop the previous watcher (and its thread) before installing the new one.
         inner.watcher = None;
         inner.vault = Some(vault);
         inner.watcher = Some(watcher);

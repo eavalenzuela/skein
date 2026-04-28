@@ -12,6 +12,7 @@
   import EmptyDesk from "./components/EmptyDesk.svelte";
   import Sidebar from "./components/Sidebar.svelte";
   import CommandPalette from "./components/CommandPalette.svelte";
+  import RelatedStrip from "./components/RelatedStrip.svelte";
 
   function onKeydown(e: KeyboardEvent) {
     if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K")) {
@@ -76,6 +77,7 @@
                 <EditorPage tab={active} />
               {/if}
             </div>
+            <RelatedStrip />
           {:else if vaultState.activeBook}
             <div class="sk-tabs-empty">
               <button class="bare-link" onclick={() => selectBook(null)}>
