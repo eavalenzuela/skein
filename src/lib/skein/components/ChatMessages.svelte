@@ -1,58 +1,86 @@
 <script lang="ts">
-  interface Props {
-    withSelection?: boolean;
-    streaming?: boolean;
+  import { chatState } from "../chat.svelte.js";
+
+  function onDragStart(e: DragEvent) {
+    const sel = window.getSelection();
+    if (!sel || sel.toString().length === 0) return;
+    e.dataTransfer?.setData("text/plain", sel.toString());
+    e.dataTransfer?.setData("application/x-skein-chat", sel.toString());
+    if (e.dataTransfer) e.dataTransfer.effectAllowed = "copy";
   }
-  let { withSelection = false, streaming = false }: Props = $props();
 </script>
 
-<div class="sk-chat">
-  <div class="sk-msg user">
-    Re-reading <i>The Peregrine</i>. Baker has a sentence I can't shake — something about how the
-    hardest thing to see is what's really there. Where else does that idea show up in what I've been
-    reading lately?
-  </div>
+<div class="sk-chat" role="log" aria-live="polite">
+  {#each chatState.messages as m (m.id)}
+    {#if m.role === "user"}
+      <div class="sk-msg user" role="article" ondragstart={onDragStart}>{m.content}</div>
+    {:else}
+      <div class="sk-msg asst" role="article" ondragstart={onDragStart}>
+        <div class="who">
+          <span class="ico">A</span>
+          {chatState.model.replace("claude-", "")} · {m.contextMode ?? chatState.contextMode}
+        </div>
+        <div class="body">
+          {m.content}{#if m.streaming}<span class="streaming-dot"></span>{/if}
+        </div>
+        {#if m.contextChunks && m.contextChunks.length > 0}
+          <div class="ctx">
+            <span class="ctx-label">context:</span>
+            {#each m.contextChunks as c, i (i)}
+              <span class="ctx-chip" title={c.heading || c.rel_path}>
+                {c.title}{#if c.heading}<span class="ctx-h">·{c.heading}</span>{/if}
+              </span>
+            {/each}
+          </div>
+        {/if}
+      </div>
+    {/if}
+  {/each}
 
-  <div class="sk-msg asst">
-    <div class="who"><span class="ico">A</span> Haiku 4.5 · current + related</div>
-    <p>Three threads in your vault pull on the same idea, just from different angles:</p>
-    <p>
-      <b>Annie Dillard</b>, in <code>Reading Notes/Tinker Creek.md</code>, has the line you
-      bracketed last March: looking is an act of attention before it is an act of perception. Same
-      shape as Baker — the seeing is the practice, not the prize.
-    </p>
-    <p>
-      <b>Iain McGilchrist</b>, in your March 6 daily, on the difference between <i>knowing</i> a
-      tree and <i>seeing</i> it. You wrote "this is the falcon argument" in the margin.
-    </p>
-    <p>
-      And maybe a stretch: your note on <code>Ideas/marginalia-mode.md</code> — "what is unread is not
-      yet there" — is the same claim turned toward writing instead of watching.
-    </p>
-  </div>
-
-  <div class="sk-msg user">Pull the Dillard sentence so I can drop it next to the Baker one.</div>
-
-  <div class="sk-msg asst">
-    <div class="who"><span class="ico">A</span> Haiku 4.5 · current + related</div>
-    <p>Here it is, exactly as you transcribed it:</p>
-    <p>
-      {#if withSelection}
-        <span class="chat-selection" data-chat-selection
-          >“Seeing is of course very much a matter of verbalization. Unless I call my attention to
-          what passes before my eyes, I simply won't see it.”</span
-        >
-      {:else}
-        <span
-          >“Seeing is of course very much a matter of verbalization. Unless I call my attention to
-          what passes before my eyes, I simply won't see it.”</span
-        >
-      {/if}
-    </p>
-    <p>
-      Source: <code>Reading Notes/Tinker Creek.md</code>, line 47. It sits a paragraph above the
-      Baker quote in your{#if streaming}<span class="streaming-dot"></span>{:else}
-        current note.{/if}
-    </p>
-  </div>
+  {#if chatState.error}
+    <div class="error">{chatState.error}</div>
+  {/if}
 </div>
+
+<style>
+  /* Most chat styling lives in styles.css to inherit the design's tokens.
+     Local styles cover the additions Phase 7 introduces. */
+  .sk-msg.asst .body {
+    white-space: pre-wrap;
+  }
+  .ctx {
+    margin-top: 6px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
+    font-size: 10.5px;
+  }
+  .ctx-label {
+    color: var(--ink-4);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .ctx-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 6px;
+    border: 1px solid var(--chrome-edge);
+    border-radius: 8px;
+    color: var(--ink-3);
+    background: oklch(from var(--chrome-2) calc(l + 0.02) c h);
+    font-size: 10px;
+    cursor: default;
+  }
+  .ctx-h {
+    color: var(--ink-4);
+  }
+  .error {
+    margin-top: 8px;
+    color: oklch(0.65 0.18 25);
+    font-size: 11px;
+    border-left: 2px solid oklch(0.65 0.18 25 / 0.5);
+    padding-left: 8px;
+  }
+</style>

@@ -99,6 +99,15 @@ pub struct RelatedHit {
     pub snippet: String,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct ChunkHit {
+    pub rel_path: String,
+    pub title: String,
+    pub heading: String,
+    pub text: String,
+    pub similarity: f32,
+}
+
 impl Index {
     pub fn open(path: &Path, embedder: SharedEmbedder) -> Result<Self> {
         if let Some(parent) = path.parent() {
@@ -269,6 +278,60 @@ impl Index {
         }
         tx.commit()?;
         Ok(())
+    }
+
+    /// Cosine over the chunk-level vectors, optionally excluding chunks
+    /// from a given page (used to keep RAG from echoing the active page back
+    /// at the model). Used by Phase 7 chat for "current + related" context.
+    pub fn retrieve_chunks(
+        &self,
+        query: &str,
+        limit: usize,
+        exclude_rel_path: Option<&str>,
+    ) -> Result<Vec<ChunkHit>> {
+        let model_name = self.embedder.name().to_string();
+        let q = self.embedder.embed(query);
+
+        let mut stmt = self.conn.prepare(
+            "SELECT e.rel_path, p.title, e.heading, e.text, e.vector
+             FROM embeddings e
+             JOIN pages p ON p.rel_path = e.rel_path
+             WHERE e.level = 'chunk' AND e.model = ?1",
+        )?;
+        let rows = stmt.query_map(rusqlite::params![model_name], |row| {
+            let rel_path: String = row.get(0)?;
+            let title: String = row.get(1)?;
+            let heading: String = row.get(2)?;
+            let text: String = row.get(3)?;
+            let bytes: Vec<u8> = row.get(4)?;
+            Ok((rel_path, title, heading, text, bytes_to_vec(&bytes)))
+        })?;
+
+        let mut hits: Vec<(f32, ChunkHit)> = Vec::new();
+        for r in rows {
+            let (rp, title, heading, text, v) = r?;
+            if let Some(ex) = exclude_rel_path {
+                if rp == ex {
+                    continue;
+                }
+            }
+            let sim = cosine(&q, &v);
+            if sim <= 0.0 {
+                continue;
+            }
+            hits.push((
+                sim,
+                ChunkHit {
+                    rel_path: rp,
+                    title,
+                    heading,
+                    text,
+                    similarity: sim,
+                },
+            ));
+        }
+        hits.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+        Ok(hits.into_iter().take(limit).map(|(_, h)| h).collect())
     }
 
     pub fn find_related(&self, rel_path: &str, limit: usize) -> Result<Vec<RelatedHit>> {

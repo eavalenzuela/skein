@@ -1,3 +1,4 @@
+mod chat;
 mod chunker;
 mod commands;
 mod embedder;
@@ -40,6 +41,7 @@ pub fn run() {
             commands::has_secret,
             commands::set_secret,
             commands::clear_secret,
+            commands::chat_send,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

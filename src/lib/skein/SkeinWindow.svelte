@@ -46,7 +46,7 @@
           withCaret={isDragging}
           caretAt={isDragging ? "editor" : null}
         />
-        <Sidebar mode={sidebar} withSelection={isDragging} streaming={false} />
+        <Sidebar mode={sidebar} />
         {#if isDragging}
           <DragOverlay
             x={680}

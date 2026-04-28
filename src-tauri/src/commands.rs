@@ -4,6 +4,7 @@ use std::sync::Arc;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 
+use crate::chat::{self, ChatMessageIn};
 use crate::embedder::{self, OnnxBgeEmbedder, SharedEmbedder};
 use crate::index::{self, Index, RelatedHit, SearchHit};
 use crate::secrets;
@@ -250,6 +251,34 @@ pub fn set_secret(name: String, value: String) -> Result<(), String> {
 #[tauri::command]
 pub fn clear_secret(name: String) -> Result<(), String> {
     secrets::clear(&name).map_err(err)
+}
+
+#[tauri::command]
+pub fn chat_send<R: Runtime + 'static>(
+    messages: Vec<ChatMessageIn>,
+    model: String,
+    context_mode: String,
+    current_rel_path: Option<String>,
+    max_tokens: Option<u32>,
+    app: AppHandle<R>,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    let api_key =
+        secrets::read("anthropic_api_key").ok_or_else(|| "no Anthropic API key set".to_string())?;
+    let vault = state.vault();
+    let prepared = chat::prepare_request(
+        &messages,
+        &model,
+        max_tokens.unwrap_or(4096),
+        &context_mode,
+        current_rel_path.as_deref(),
+        vault.as_ref(),
+        &state.index,
+    )
+    .map_err(err)?;
+
+    let turn_id = chat::spawn_chat(app, api_key, prepared.body, prepared.context);
+    Ok(turn_id)
 }
 
 #[tauri::command]
