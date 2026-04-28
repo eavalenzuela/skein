@@ -8,6 +8,9 @@ export interface Settings {
   shelf_style: string | null;
   sidebar: string | null;
   page_font: string | null;
+  daily_book: string | null;
+  daily_template: string | null;
+  daily_reminder_time: string | null;
 }
 
 export interface SettingsPatch {
@@ -15,6 +18,9 @@ export interface SettingsPatch {
   shelf_style?: string;
   sidebar?: string;
   page_font?: string;
+  daily_book?: string;
+  daily_template?: string;
+  daily_reminder_time?: string;
 }
 
 export const getSettings = () => invoke<Settings>("get_settings");

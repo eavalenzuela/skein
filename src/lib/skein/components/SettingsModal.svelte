@@ -10,8 +10,16 @@
   } from "../tweaks.svelte.js";
   import { embedderState, downloadModel } from "../embedder.svelte.js";
   import { vaultState, open as openVaultPath, close as closeVault } from "../vault.svelte.js";
-  import { hasSecret, setSecret, clearSecret, type SecretName } from "../settings.js";
+  import {
+    hasSecret,
+    setSecret,
+    clearSecret,
+    getSettings,
+    setSettings,
+    type SecretName,
+  } from "../settings.js";
   import { open as openDialog } from "@tauri-apps/plugin-dialog";
+  import { isPermissionGranted, requestPermission } from "@tauri-apps/plugin-notification";
 
   interface Props {
     onClose: () => void;
@@ -31,6 +39,52 @@
   let savingVoyage = $state(false);
   let secretError = $state<string | null>(null);
 
+  let dailyBook = $state("Daily");
+  let dailyTemplate = $state(
+    `---\ntitle: {{long_date}}\ntags: [daily]\ncreated: {{date}}\n---\n\n## Morning\n\n\n## Notes\n\n\n## Tomorrow\n\n`,
+  );
+  let dailyReminderTime = $state("");
+  let dailyError = $state<string | null>(null);
+  let dailySaving = $state(false);
+
+  async function loadDaily() {
+    try {
+      const s = await getSettings();
+      if (s.daily_book) dailyBook = s.daily_book;
+      if (s.daily_template) dailyTemplate = s.daily_template;
+      if (s.daily_reminder_time) dailyReminderTime = s.daily_reminder_time;
+    } catch (e) {
+      dailyError = String(e);
+    }
+  }
+
+  async function saveDaily() {
+    dailySaving = true;
+    dailyError = null;
+    try {
+      // If a reminder time is set and we don't yet have notification
+      // permission, request it now.
+      if (dailyReminderTime) {
+        const granted = await isPermissionGranted();
+        if (!granted) {
+          const decision = await requestPermission();
+          if (decision !== "granted") {
+            dailyError = "Notification permission was not granted; reminders won't fire.";
+          }
+        }
+      }
+      await setSettings({
+        daily_book: dailyBook.trim() || "Daily",
+        daily_template: dailyTemplate,
+        daily_reminder_time: dailyReminderTime.trim(),
+      });
+    } catch (e) {
+      dailyError = String(e);
+    } finally {
+      dailySaving = false;
+    }
+  }
+
   async function refreshSecrets() {
     try {
       [anthropicSet, voyageSet] = await Promise.all([
@@ -42,7 +96,10 @@
     }
   }
 
-  onMount(refreshSecrets);
+  onMount(() => {
+    void refreshSecrets();
+    void loadDaily();
+  });
 
   async function saveSecret(name: SecretName, value: string) {
     secretError = null;
@@ -186,6 +243,40 @@
         </div>
         {#if embedderState.error}
           <p class="error">{embedderState.error}</p>
+        {/if}
+      </section>
+
+      <section>
+        <h3>Daily notes</h3>
+        <div class="grid">
+          <div class="grid-label">Book name</div>
+          <input class="text-input" bind:value={dailyBook} placeholder="Daily" />
+
+          <div class="grid-label">Reminder time</div>
+          <div class="reminder-row">
+            <input
+              class="text-input small"
+              bind:value={dailyReminderTime}
+              placeholder="HH:MM (24h)"
+            />
+            <span class="muted">leave blank to disable</span>
+          </div>
+
+          <div class="grid-label">Template</div>
+          <textarea bind:value={dailyTemplate} rows="9" spellcheck="false"></textarea>
+
+          <div class="grid-label"></div>
+          <div class="row">
+            <span class="muted"
+              >Placeholders: {`{{date}}, {{long_date}}, {{weekday}}, {{time}}`}</span
+            >
+            <button class="primary" onclick={saveDaily} disabled={dailySaving}>
+              {dailySaving ? "saving…" : "save daily settings"}
+            </button>
+          </div>
+        </div>
+        {#if dailyError}
+          <p class="error">{dailyError}</p>
         {/if}
       </section>
 
@@ -407,6 +498,45 @@
     font-size: 12px;
     width: max-content;
     min-width: 200px;
+  }
+  .text-input {
+    padding: 6px 10px;
+    background: oklch(from var(--chrome-2) calc(l + 0.03) c h);
+    border: 1px solid var(--chrome-edge);
+    color: var(--ink);
+    border-radius: 5px;
+    font-family: "Inter", system-ui, sans-serif;
+    font-size: 12px;
+    outline: none;
+    width: 240px;
+  }
+  .text-input.small {
+    width: 120px;
+    font-family: "JetBrains Mono", monospace;
+  }
+  .text-input:focus {
+    border-color: var(--accent-edge);
+  }
+  .reminder-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  textarea {
+    width: 100%;
+    padding: 8px 10px;
+    background: oklch(from var(--chrome-2) calc(l + 0.03) c h);
+    border: 1px solid var(--chrome-edge);
+    color: var(--ink);
+    border-radius: 5px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11.5px;
+    line-height: 1.45;
+    outline: none;
+    resize: vertical;
+  }
+  textarea:focus {
+    border-color: var(--accent-edge);
   }
   .key {
     display: grid;

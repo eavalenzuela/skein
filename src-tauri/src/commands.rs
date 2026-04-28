@@ -6,6 +6,7 @@ use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 
 use crate::autotag;
 use crate::chat::{self, ChatMessageIn};
+use crate::daily::{self, DailyResult};
 use crate::embedder::{self, OnnxBgeEmbedder, SharedEmbedder};
 use crate::index::{self, BacklinkHit, Index, PageTitle, RelatedHit, SearchHit};
 use crate::secrets;
@@ -308,6 +309,28 @@ pub fn apply_tag(rel_path: String, tag: String, state: State<'_, AppState>) -> R
         }
     }
     Ok(())
+}
+
+#[tauri::command]
+pub fn open_today_daily<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, AppState>,
+) -> Result<DailyResult, String> {
+    let vault = state.vault().ok_or("no vault open")?;
+    let s = settings::load(&app);
+    let book = s.daily_book.as_deref();
+    let template = s.daily_template.as_deref();
+    let result = daily::ensure_today(&vault, book, template).map_err(err)?;
+    if result.created {
+        // Make sure the new page lands in the index right away rather than
+        // waiting for the watcher to debounce.
+        if let Some(data) = vault::read_page_data(&vault, &vault.root.join(&result.rel_path)) {
+            if let Some(idx) = state.index.lock().as_mut() {
+                let _ = idx.upsert_page(&data);
+            }
+        }
+    }
+    Ok(result)
 }
 
 #[tauri::command]

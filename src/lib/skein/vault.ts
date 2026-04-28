@@ -83,3 +83,10 @@ export interface BacklinkHit {
 export const listPageTitles = () => invoke<PageTitle[]>("list_page_titles");
 export const findBacklinks = (relPath: string) =>
   invoke<BacklinkHit[]>("find_backlinks", { relPath });
+
+export interface DailyResult {
+  rel_path: string;
+  created: boolean;
+}
+
+export const openTodayDaily = () => invoke<DailyResult>("open_today_daily");

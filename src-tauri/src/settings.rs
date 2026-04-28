@@ -12,6 +12,9 @@ pub struct Settings {
     pub shelf_style: Option<String>,
     pub sidebar: Option<String>,
     pub page_font: Option<String>,
+    pub daily_book: Option<String>,
+    pub daily_template: Option<String>,
+    pub daily_reminder_time: Option<String>,
 }
 
 #[derive(Deserialize, Default, Clone, Debug)]
@@ -20,6 +23,9 @@ pub struct SettingsPatch {
     pub shelf_style: Option<String>,
     pub sidebar: Option<String>,
     pub page_font: Option<String>,
+    pub daily_book: Option<String>,
+    pub daily_template: Option<String>,
+    pub daily_reminder_time: Option<String>,
 }
 
 impl Settings {
@@ -35,6 +41,16 @@ impl Settings {
         }
         if let Some(v) = patch.page_font {
             self.page_font = Some(v);
+        }
+        if let Some(v) = patch.daily_book {
+            self.daily_book = Some(v);
+        }
+        if let Some(v) = patch.daily_template {
+            self.daily_template = Some(v);
+        }
+        if let Some(v) = patch.daily_reminder_time {
+            // Empty string clears it.
+            self.daily_reminder_time = if v.is_empty() { None } else { Some(v) };
         }
     }
 }

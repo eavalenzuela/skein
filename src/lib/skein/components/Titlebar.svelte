@@ -1,11 +1,26 @@
 <script lang="ts">
   import { openSearch } from "../searchUi.svelte.js";
   import { openSettings } from "../settingsUi.svelte.js";
+  import { openTodayDaily } from "../vault.js";
+  import { openTab } from "../tabs.svelte.js";
 
   interface Props {
     vault: string;
   }
   let { vault }: Props = $props();
+
+  async function jumpToToday() {
+    try {
+      const res = await openTodayDaily();
+      // Use the filename stem as the tab title — the indexer will refine it
+      // once the watcher reconciles the new file.
+      const stem = res.rel_path.split("/").pop()?.replace(/\.md$/, "") ?? res.rel_path;
+      await openTab({ rel_path: res.rel_path, title: stem });
+    } catch {
+      // No vault open or write failed — silently ignore for now; the
+      // Settings modal is the right place to surface daily-note errors.
+    }
+  }
 </script>
 
 <div class="sk-titlebar">
@@ -19,6 +34,24 @@
     Skein <span class="vault">— {vault}</span>
   </div>
   <div class="sk-tb-right">
+    <button
+      class="sk-tb-btn bare"
+      title="Today's daily note"
+      onclick={jumpToToday}
+      aria-label="Today's daily note"
+    >
+      <svg
+        width="13"
+        height="13"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.4"
+      >
+        <rect x="2.5" y="3.5" width="11" height="10" rx="1.5" />
+        <path d="M5 2v3M11 2v3M2.5 7h11" />
+      </svg>
+    </button>
     <button class="sk-tb-btn bare" title="Search (Ctrl+K)" onclick={openSearch} aria-label="Search">
       <svg
         width="13"

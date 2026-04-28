@@ -2,6 +2,7 @@ mod autotag;
 mod chat;
 mod chunker;
 mod commands;
+mod daily;
 mod embedder;
 mod index;
 mod secrets;
@@ -10,17 +11,25 @@ mod state;
 mod vault;
 mod watcher;
 
+use std::sync::Arc;
+
+use parking_lot::Mutex;
+
 use state::AppState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(AppState::default())
         .setup(|app| {
             let handle = app.handle().clone();
             commands::try_load_local_embedding_model(&handle);
             commands::restore_last_vault(&handle);
+            // Daily-note reminder loop runs for the lifetime of the app.
+            let reminder_state = Arc::new(Mutex::new(daily::ReminderState::default()));
+            daily::spawn_reminder(handle.clone(), reminder_state);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -47,6 +56,7 @@ pub fn run() {
             commands::chat_send,
             commands::suggest_tags,
             commands::apply_tag,
+            commands::open_today_daily,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
