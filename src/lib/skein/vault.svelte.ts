@@ -9,17 +9,11 @@ import {
   listBooks,
   listLoosePages,
   listPagesInBook,
-  readPage,
   type Vault,
   type Book,
   type Page,
 } from "./vault.js";
-
-export interface OpenPage {
-  rel_path: string;
-  title: string;
-  body: string;
-}
+import { reconcileExternal } from "./tabs.svelte.js";
 
 export const vaultState: {
   vault: Vault | null;
@@ -27,7 +21,6 @@ export const vaultState: {
   loosePages: Page[];
   activeBook: string | null;
   pagesInActiveBook: Page[];
-  openPage: OpenPage | null;
   loading: boolean;
   error: string | null;
 } = $state({
@@ -36,7 +29,6 @@ export const vaultState: {
   loosePages: [],
   activeBook: null,
   pagesInActiveBook: [],
-  openPage: null,
   loading: false,
   error: null,
 });
@@ -52,10 +44,7 @@ async function refreshVaultLists() {
     if (vaultState.activeBook) {
       vaultState.pagesInActiveBook = await listPagesInBook(vaultState.activeBook);
     }
-    if (vaultState.openPage) {
-      const body = await readPage(vaultState.openPage.rel_path);
-      vaultState.openPage = { ...vaultState.openPage, body };
-    }
+    await reconcileExternal();
   } catch (e) {
     vaultState.error = String(e);
   }
@@ -91,7 +80,6 @@ export async function open(path: string) {
     const v = await openVault(path);
     vaultState.vault = v;
     vaultState.activeBook = null;
-    vaultState.openPage = null;
     vaultState.pagesInActiveBook = [];
     await refreshVaultLists();
     await attachWatcher();
@@ -113,24 +101,13 @@ export async function close() {
   vaultState.loosePages = [];
   vaultState.activeBook = null;
   vaultState.pagesInActiveBook = [];
-  vaultState.openPage = null;
 }
 
 export async function selectBook(name: string | null) {
   vaultState.activeBook = name;
-  vaultState.openPage = null;
   if (name) {
     vaultState.pagesInActiveBook = await listPagesInBook(name);
   } else {
     vaultState.pagesInActiveBook = [];
   }
-}
-
-export async function openPageByPath(relPath: string, title: string) {
-  const body = await readPage(relPath);
-  vaultState.openPage = { rel_path: relPath, title, body };
-}
-
-export function closeOpenPage() {
-  vaultState.openPage = null;
 }

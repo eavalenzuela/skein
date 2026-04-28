@@ -1,10 +1,12 @@
 <script lang="ts">
   import "./styles.css";
   import type { Theme, ShelfStyle, SidebarMode, PageFont } from "./tweaks.svelte.js";
-  import { vaultState, selectBook, closeOpenPage } from "./vault.svelte.js";
+  import { vaultState, selectBook } from "./vault.svelte.js";
+  import { tabsState, setActive, closeTab, togglePin, pinned, activeTab } from "./tabs.svelte.js";
   import Titlebar from "./components/Titlebar.svelte";
   import VaultBookshelf from "./components/VaultBookshelf.svelte";
-  import MarkdownPage from "./components/MarkdownPage.svelte";
+  import LiveTabs from "./components/LiveTabs.svelte";
+  import EditorPage from "./components/EditorPage.svelte";
   import PageList from "./components/PageList.svelte";
   import EmptyDesk from "./components/EmptyDesk.svelte";
   import Sidebar from "./components/Sidebar.svelte";
@@ -29,6 +31,11 @@
         ? "sidebar-collapsed"
         : "sidebar-hidden",
   );
+
+  let leftPin = $derived(pinned("left"));
+  let rightPin = $derived(pinned("right"));
+  let isSplit = $derived(!!leftPin && !!rightPin);
+  let active = $derived(activeTab());
 </script>
 
 <div class="skein theme-{theme}" style:--page-font={pageFont}>
@@ -38,35 +45,27 @@
       <VaultBookshelf style={shelfStyle} {theme} books={vaultState.books} />
       <div class="sk-mid {midClass}" style:position="relative">
         <div class="sk-desk">
-          {#if vaultState.openPage}
-            <div class="sk-tabs">
-              <div class="sk-tab active">
-                <span class="pin-ind">
-                  <svg
-                    width="10"
-                    height="10"
-                    viewBox="0 0 12 12"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.3"
-                  >
-                    <path d="M2.5 1.5h5l2 2v7h-7zM7 1.5v2h2" />
-                  </svg>
-                </span>
-                <span class="name">{vaultState.openPage.title}</span>
-                <button class="x bare" onclick={closeOpenPage} aria-label="Close page">×</button>
-              </div>
-            </div>
+          {#if tabsState.tabs.length > 0}
+            <LiveTabs
+              tabs={tabsState.tabs}
+              activeId={tabsState.activeId}
+              onSelect={setActive}
+              onClose={closeTab}
+              onPin={togglePin}
+            />
             <div class="sk-surface">
-              <div class="sk-page">
-                <MarkdownPage page={vaultState.openPage} />
-              </div>
+              {#if isSplit && leftPin && rightPin}
+                <EditorPage tab={leftPin} />
+                <EditorPage tab={rightPin} />
+              {:else if active}
+                <EditorPage tab={active} />
+              {/if}
             </div>
           {:else if vaultState.activeBook}
             <div class="sk-tabs-empty">
-              <button class="bare-link" onclick={() => selectBook(null)}
-                >&laquo; back to Folio</button
-              >
+              <button class="bare-link" onclick={() => selectBook(null)}>
+                &laquo; back to Folio
+              </button>
             </div>
             <PageList title={vaultState.activeBook} pages={vaultState.pagesInActiveBook} />
           {:else}
@@ -88,14 +87,6 @@
   .skein {
     width: 100%;
     height: 100%;
-  }
-  .bare {
-    background: transparent;
-    border: 0;
-    padding: 0;
-    cursor: pointer;
-    color: inherit;
-    font: inherit;
   }
   .bare-link {
     background: transparent;

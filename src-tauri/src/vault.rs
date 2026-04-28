@@ -197,3 +197,19 @@ pub fn read_page_body(vault: &Vault, rel_path: &str) -> Result<String> {
     }
     Ok(fs::read_to_string(canonical)?)
 }
+
+pub fn write_page_body(vault: &Vault, rel_path: &str, body: &str) -> Result<()> {
+    let full = vault.root.join(rel_path);
+    let parent = full
+        .parent()
+        .with_context(|| format!("page path has no parent: {}", rel_path))?;
+    if !parent.exists() {
+        fs::create_dir_all(parent)?;
+    }
+    let canonical_parent = parent.canonicalize()?;
+    if !canonical_parent.starts_with(&vault.root) {
+        anyhow::bail!("path escapes vault root: {}", rel_path);
+    }
+    fs::write(&full, body)?;
+    Ok(())
+}

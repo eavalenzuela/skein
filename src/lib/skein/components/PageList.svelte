@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Page } from "../vault.js";
-  import { openPageByPath } from "../vault.svelte.js";
+  import { openTab } from "../tabs.svelte.js";
 
   interface Props {
     pages: Page[];
@@ -20,7 +20,7 @@
     <ul>
       {#each pages as p (p.rel_path)}
         <li>
-          <button onclick={() => openPageByPath(p.rel_path, p.title)}>
+          <button onclick={() => openTab(p)}>
             <span class="ttl">{p.title}</span>
             <span class="rp">{p.rel_path}</span>
           </button>

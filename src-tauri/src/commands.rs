@@ -75,6 +75,16 @@ pub fn read_page(rel_path: String, state: State<'_, AppState>) -> Result<String,
     vault::read_page_body(&vault, &rel_path).map_err(err)
 }
 
+#[tauri::command]
+pub fn write_page(
+    rel_path: String,
+    body: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let vault = state.vault().ok_or("no vault open")?;
+    vault::write_page_body(&vault, &rel_path, &body).map_err(err)
+}
+
 /// Re-open the vault recorded in settings, if any.
 pub fn restore_last_vault<R: Runtime>(app: &AppHandle<R>) {
     let settings: Settings = settings::load(app);

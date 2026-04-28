@@ -23,6 +23,7 @@ pub fn run() {
             commands::list_loose_pages,
             commands::list_pages_in_book,
             commands::read_page,
+            commands::write_page,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -28,3 +28,5 @@ export const listBooks = () => invoke<Book[]>("list_books");
 export const listLoosePages = () => invoke<Page[]>("list_loose_pages");
 export const listPagesInBook = (book: string) => invoke<Page[]>("list_pages_in_book", { book });
 export const readPage = (relPath: string) => invoke<string>("read_page", { relPath });
+export const writePage = (relPath: string, body: string) =>
+  invoke<void>("write_page", { relPath, body });
