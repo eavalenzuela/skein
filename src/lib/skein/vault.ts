@@ -30,3 +30,15 @@ export const listPagesInBook = (book: string) => invoke<Page[]>("list_pages_in_b
 export const readPage = (relPath: string) => invoke<string>("read_page", { relPath });
 export const writePage = (relPath: string, body: string) =>
   invoke<void>("write_page", { relPath, body });
+
+export interface SearchHit {
+  rel_path: string;
+  title: string;
+  book: string | null;
+  snippet: string;
+}
+
+export const searchPages = (query: string, limit?: number) =>
+  invoke<SearchHit[]>("search_pages", { query, limit });
+
+export const rebuildIndex = () => invoke<number>("rebuild_index");

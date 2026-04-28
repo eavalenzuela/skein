@@ -105,6 +105,77 @@ fn page_from_path(root: &Path, full: &Path, book: Option<&str>) -> Option<Page> 
     })
 }
 
+/// Full data the indexer needs for one page.
+#[derive(Debug, Clone)]
+pub struct PageData {
+    pub rel_path: String,
+    pub title: String,
+    pub book: Option<String>,
+    pub body: String,
+    pub tags: Vec<String>,
+    pub modified: i64,
+}
+
+/// Read everything we need to index for the file at `abs`. Returns None for
+/// non-markdown / non-vault paths. Used by the watcher.
+pub fn read_page_data(vault: &Vault, abs: &Path) -> Option<PageData> {
+    if !abs.is_file() || !is_md(abs) || is_hidden(abs) {
+        return None;
+    }
+    let canonical = abs.canonicalize().ok()?;
+    if !canonical.starts_with(&vault.root) {
+        return None;
+    }
+    let rel_path = rel_string(&vault.root, &canonical)?;
+    let body = fs::read_to_string(&canonical).ok()?;
+    let (fm_title, tags) = extract_frontmatter(&body);
+    let stem = canonical
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("untitled")
+        .to_string();
+    let title = fm_title.unwrap_or(stem);
+    let book = canonical
+        .strip_prefix(&vault.root)
+        .ok()
+        .and_then(|p| p.parent())
+        .and_then(|p| {
+            let s = p.to_string_lossy().replace('\\', "/");
+            if s.is_empty() {
+                None
+            } else {
+                Some(s.split('/').next().unwrap_or("").to_string())
+            }
+        })
+        .filter(|s| !s.is_empty());
+    Some(PageData {
+        rel_path,
+        title,
+        book,
+        body,
+        tags,
+        modified: read_modified(&canonical),
+    })
+}
+
+/// Walk the vault and yield PageData for every markdown file.
+pub fn walk_pages(vault: &Vault) -> Vec<PageData> {
+    let mut out = Vec::new();
+    for entry in walkdir::WalkDir::new(&vault.root)
+        .max_depth(2)
+        .follow_links(false)
+        .into_iter()
+        .filter_entry(|e| !is_hidden(e.path()))
+        .flatten()
+    {
+        let path = entry.path();
+        if let Some(data) = read_page_data(vault, path) {
+            out.push(data);
+        }
+    }
+    out
+}
+
 fn is_hidden(path: &Path) -> bool {
     path.file_name()
         .and_then(|s| s.to_str())

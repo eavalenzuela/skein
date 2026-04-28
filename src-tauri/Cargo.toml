@@ -23,6 +23,8 @@ gray_matter = { version = "0.2", default-features = false, features = ["yaml"] }
 walkdir = "2"
 anyhow = "1"
 parking_lot = "0.12"
+rusqlite = { version = "0.32", features = ["bundled"] }
+sha2 = "0.10"
 
 [profile.release]
 panic = "abort"

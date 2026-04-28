@@ -1,4 +1,5 @@
 mod commands;
+mod index;
 mod settings;
 mod state;
 mod vault;
@@ -24,6 +25,8 @@ pub fn run() {
             commands::list_pages_in_book,
             commands::read_page,
             commands::write_page,
+            commands::search_pages,
+            commands::rebuild_index,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

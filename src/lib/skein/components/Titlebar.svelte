@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { openSearch } from "../searchUi.svelte.js";
+
   interface Props {
     vault: string;
   }
@@ -16,7 +18,7 @@
     Skein <span class="vault">— {vault}</span>
   </div>
   <div class="sk-tb-right">
-    <div class="sk-tb-btn" title="Search">
+    <button class="sk-tb-btn bare" title="Search (Ctrl+K)" onclick={openSearch} aria-label="Search">
       <svg
         width="13"
         height="13"
@@ -28,7 +30,7 @@
         <circle cx="7" cy="7" r="4" />
         <path d="M10 10l3 3" />
       </svg>
-    </div>
+    </button>
     <div class="sk-tb-btn" title="Vaults">
       <svg
         width="14"
@@ -96,3 +98,13 @@
     </div>
   </div>
 </div>
+
+<style>
+  .bare {
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    color: inherit;
+    font: inherit;
+  }
+</style>

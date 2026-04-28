@@ -3,6 +3,7 @@
   import type { Theme, ShelfStyle, SidebarMode, PageFont } from "./tweaks.svelte.js";
   import { vaultState, selectBook } from "./vault.svelte.js";
   import { tabsState, setActive, closeTab, togglePin, pinned, activeTab } from "./tabs.svelte.js";
+  import { searchUi, openSearch, closeSearch } from "./searchUi.svelte.js";
   import Titlebar from "./components/Titlebar.svelte";
   import VaultBookshelf from "./components/VaultBookshelf.svelte";
   import LiveTabs from "./components/LiveTabs.svelte";
@@ -10,6 +11,18 @@
   import PageList from "./components/PageList.svelte";
   import EmptyDesk from "./components/EmptyDesk.svelte";
   import Sidebar from "./components/Sidebar.svelte";
+  import CommandPalette from "./components/CommandPalette.svelte";
+
+  function onKeydown(e: KeyboardEvent) {
+    if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K")) {
+      e.preventDefault();
+      if (searchUi.open) closeSearch();
+      else openSearch();
+    } else if ((e.ctrlKey || e.metaKey) && (e.key === "p" || e.key === "P") && !e.shiftKey) {
+      e.preventDefault();
+      openSearch();
+    }
+  }
 
   interface Props {
     theme?: Theme;
@@ -37,6 +50,8 @@
   let isSplit = $derived(!!leftPin && !!rightPin);
   let active = $derived(activeTab());
 </script>
+
+<svelte:window onkeydown={onKeydown} />
 
 <div class="skein theme-{theme}" style:--page-font={pageFont}>
   <div class="win">
@@ -82,6 +97,10 @@
     </div>
   </div>
 </div>
+
+{#if searchUi.open}
+  <CommandPalette />
+{/if}
 
 <style>
   .skein {
