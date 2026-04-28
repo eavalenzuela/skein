@@ -6,7 +6,8 @@ use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 
 use crate::embedder::{self, OnnxBgeEmbedder, SharedEmbedder};
 use crate::index::{self, Index, RelatedHit, SearchHit};
-use crate::settings::{self, Settings};
+use crate::secrets;
+use crate::settings::{self, Settings, SettingsPatch};
 use crate::state::AppState;
 use crate::vault::{self, Book, Page, Vault};
 use crate::watcher;
@@ -218,6 +219,37 @@ pub fn embedding_model_status(state: State<'_, AppState>) -> EmbeddingModelStatu
         local: name == "bge-small-en-v1.5",
         name,
     }
+}
+
+#[tauri::command]
+pub fn get_settings<R: Runtime>(app: AppHandle<R>) -> Settings {
+    settings::load(&app)
+}
+
+#[tauri::command]
+pub fn set_settings<R: Runtime>(
+    patch: SettingsPatch,
+    app: AppHandle<R>,
+) -> Result<Settings, String> {
+    let mut s = settings::load(&app);
+    s.apply(patch);
+    settings::save(&app, &s).map_err(err)?;
+    Ok(s)
+}
+
+#[tauri::command]
+pub fn has_secret(name: String) -> bool {
+    secrets::has(&name)
+}
+
+#[tauri::command]
+pub fn set_secret(name: String, value: String) -> Result<(), String> {
+    secrets::set(&name, &value).map_err(err)
+}
+
+#[tauri::command]
+pub fn clear_secret(name: String) -> Result<(), String> {
+    secrets::clear(&name).map_err(err)
 }
 
 #[tauri::command]

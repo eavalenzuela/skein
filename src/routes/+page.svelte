@@ -4,7 +4,7 @@
   import VaultWindow from "$lib/skein/VaultWindow.svelte";
   import VaultPicker from "$lib/skein/components/VaultPicker.svelte";
   import DevControls from "$lib/skein/DevControls.svelte";
-  import { tweaks } from "$lib/skein/tweaks.svelte.js";
+  import { tweaks, bootstrap as bootstrapTweaks, persist } from "$lib/skein/tweaks.svelte.js";
   import { vaultState, bootstrap } from "$lib/skein/vault.svelte.js";
   import { bootstrap as bootstrapEmbedder } from "$lib/skein/embedder.svelte.js";
 
@@ -12,8 +12,17 @@
   let designPreview = $state(false);
 
   onMount(async () => {
-    await Promise.all([bootstrap(), bootstrapEmbedder()]);
+    await Promise.all([bootstrapTweaks(), bootstrap(), bootstrapEmbedder()]);
     bootstrapped = true;
+  });
+
+  // Persist any change to the appearance tweaks (regardless of which UI
+  // surface — Settings modal or DevControls — drives it). Scenario is
+  // intentionally excluded; it's a dev-preview toggle and shouldn't be
+  // saved across runs.
+  $effect(() => {
+    void [tweaks.theme, tweaks.shelfStyle, tweaks.sidebar, tweaks.pageFont];
+    if (bootstrapped) persist();
   });
 </script>
 

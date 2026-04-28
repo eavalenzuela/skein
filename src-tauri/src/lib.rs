@@ -2,6 +2,7 @@ mod chunker;
 mod commands;
 mod embedder;
 mod index;
+mod secrets;
 mod settings;
 mod state;
 mod vault;
@@ -34,6 +35,11 @@ pub fn run() {
             commands::rebuild_index,
             commands::embedding_model_status,
             commands::download_embedding_model,
+            commands::get_settings,
+            commands::set_settings,
+            commands::has_secret,
+            commands::set_secret,
+            commands::clear_secret,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

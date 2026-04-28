@@ -4,6 +4,7 @@
   import { vaultState, selectBook } from "./vault.svelte.js";
   import { tabsState, setActive, closeTab, togglePin, pinned, activeTab } from "./tabs.svelte.js";
   import { searchUi, openSearch, closeSearch } from "./searchUi.svelte.js";
+  import { settingsUi, openSettings, closeSettings } from "./settingsUi.svelte.js";
   import Titlebar from "./components/Titlebar.svelte";
   import VaultBookshelf from "./components/VaultBookshelf.svelte";
   import LiveTabs from "./components/LiveTabs.svelte";
@@ -13,6 +14,7 @@
   import Sidebar from "./components/Sidebar.svelte";
   import CommandPalette from "./components/CommandPalette.svelte";
   import RelatedStrip from "./components/RelatedStrip.svelte";
+  import SettingsModal from "./components/SettingsModal.svelte";
 
   function onKeydown(e: KeyboardEvent) {
     if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K")) {
@@ -22,6 +24,10 @@
     } else if ((e.ctrlKey || e.metaKey) && (e.key === "p" || e.key === "P") && !e.shiftKey) {
       e.preventDefault();
       openSearch();
+    } else if ((e.ctrlKey || e.metaKey) && e.key === ",") {
+      e.preventDefault();
+      if (settingsUi.open) closeSettings();
+      else openSettings();
     }
   }
 
@@ -102,6 +108,10 @@
 
 {#if searchUi.open}
   <CommandPalette />
+{/if}
+
+{#if settingsUi.open}
+  <SettingsModal onClose={closeSettings} />
 {/if}
 
 <style>

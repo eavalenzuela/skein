@@ -8,6 +8,35 @@ use tauri::{AppHandle, Manager, Runtime};
 #[derive(Serialize, Deserialize, Default, Clone, Debug)]
 pub struct Settings {
     pub vault_path: Option<PathBuf>,
+    pub theme: Option<String>,
+    pub shelf_style: Option<String>,
+    pub sidebar: Option<String>,
+    pub page_font: Option<String>,
+}
+
+#[derive(Deserialize, Default, Clone, Debug)]
+pub struct SettingsPatch {
+    pub theme: Option<String>,
+    pub shelf_style: Option<String>,
+    pub sidebar: Option<String>,
+    pub page_font: Option<String>,
+}
+
+impl Settings {
+    pub fn apply(&mut self, patch: SettingsPatch) {
+        if let Some(v) = patch.theme {
+            self.theme = Some(v);
+        }
+        if let Some(v) = patch.shelf_style {
+            self.shelf_style = Some(v);
+        }
+        if let Some(v) = patch.sidebar {
+            self.sidebar = Some(v);
+        }
+        if let Some(v) = patch.page_font {
+            self.page_font = Some(v);
+        }
+    }
 }
 
 fn settings_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf> {

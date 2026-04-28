@@ -1,5 +1,6 @@
 <script lang="ts">
   import { openSearch } from "../searchUi.svelte.js";
+  import { openSettings } from "../settingsUi.svelte.js";
 
   interface Props {
     vault: string;
@@ -43,7 +44,12 @@
         <path d="M3 2.5h10M3 5.5h10M3 8.5h7M3 11.5h5" />
       </svg>
     </div>
-    <div class="sk-tb-btn" title="Settings">
+    <button
+      class="sk-tb-btn bare"
+      title="Settings (Ctrl+,)"
+      onclick={openSettings}
+      aria-label="Settings"
+    >
       <svg
         width="13"
         height="13"
@@ -57,7 +63,7 @@
           d="M8 1.5v2M8 12.5v2M14.5 8h-2M3.5 8h-2M12.6 3.4l-1.4 1.4M4.8 11.2l-1.4 1.4M12.6 12.6l-1.4-1.4M4.8 4.8L3.4 3.4"
         />
       </svg>
-    </div>
+    </button>
     <div class="sk-tb-window">
       <button title="Minimize" aria-label="Minimize">
         <svg
