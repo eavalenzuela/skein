@@ -67,3 +67,19 @@ export const downloadEmbeddingModel = () =>
 export const suggestTags = (relPath: string) => invoke<string[]>("suggest_tags", { relPath });
 export const applyTag = (relPath: string, tag: string) =>
   invoke<void>("apply_tag", { relPath, tag });
+
+export interface PageTitle {
+  rel_path: string;
+  title: string;
+}
+
+export interface BacklinkHit {
+  from_rel_path: string;
+  from_title: string;
+  from_book: string | null;
+  alias: string | null;
+}
+
+export const listPageTitles = () => invoke<PageTitle[]>("list_page_titles");
+export const findBacklinks = (relPath: string) =>
+  invoke<BacklinkHit[]>("find_backlinks", { relPath });

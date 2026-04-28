@@ -7,12 +7,13 @@
   import { tweaks, bootstrap as bootstrapTweaks, persist } from "$lib/skein/tweaks.svelte.js";
   import { vaultState, bootstrap } from "$lib/skein/vault.svelte.js";
   import { bootstrap as bootstrapEmbedder } from "$lib/skein/embedder.svelte.js";
+  import { bootstrap as bootstrapTitles } from "$lib/skein/titles.svelte.js";
 
   let bootstrapped = $state(false);
   let designPreview = $state(false);
 
   onMount(async () => {
-    await Promise.all([bootstrapTweaks(), bootstrap(), bootstrapEmbedder()]);
+    await Promise.all([bootstrapTweaks(), bootstrap(), bootstrapEmbedder(), bootstrapTitles()]);
     bootstrapped = true;
   });
 

@@ -34,6 +34,8 @@ pub fn run() {
             commands::write_page,
             commands::search_pages,
             commands::find_related,
+            commands::list_page_titles,
+            commands::find_backlinks,
             commands::rebuild_index,
             commands::embedding_model_status,
             commands::download_embedding_model,

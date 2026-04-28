@@ -7,7 +7,7 @@ use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 use crate::autotag;
 use crate::chat::{self, ChatMessageIn};
 use crate::embedder::{self, OnnxBgeEmbedder, SharedEmbedder};
-use crate::index::{self, Index, RelatedHit, SearchHit};
+use crate::index::{self, BacklinkHit, Index, PageTitle, RelatedHit, SearchHit};
 use crate::secrets;
 use crate::settings::{self, Settings, SettingsPatch};
 use crate::state::AppState;
@@ -163,6 +163,27 @@ pub fn find_related(
         .ok_or_else(|| "index not initialized".to_string())?;
     let limit = limit.unwrap_or(8).min(50) as usize;
     idx.find_related(&rel_path, limit).map_err(err)
+}
+
+#[tauri::command]
+pub fn list_page_titles(state: State<'_, AppState>) -> Result<Vec<PageTitle>, String> {
+    let mut idx_slot = state.index.lock();
+    let idx = idx_slot
+        .as_mut()
+        .ok_or_else(|| "index not initialized".to_string())?;
+    idx.list_page_titles().map_err(err)
+}
+
+#[tauri::command]
+pub fn find_backlinks(
+    rel_path: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<BacklinkHit>, String> {
+    let mut idx_slot = state.index.lock();
+    let idx = idx_slot
+        .as_mut()
+        .ok_or_else(|| "index not initialized".to_string())?;
+    idx.find_backlinks(&rel_path).map_err(err)
 }
 
 #[tauri::command]

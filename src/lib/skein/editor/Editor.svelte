@@ -7,6 +7,7 @@
   import { syntaxHighlighting, defaultHighlightStyle } from "@codemirror/language";
   import { skeinEditorTheme, skeinHighlighting } from "./theme.js";
   import { skeinLivePreview } from "./livePreview.js";
+  import { wikilinkAutocomplete } from "./wikilinkComplete.js";
 
   interface Props {
     doc: string;
@@ -34,6 +35,7 @@
           syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
           skeinHighlighting,
           skeinLivePreview,
+          wikilinkAutocomplete,
           skeinEditorTheme,
           keymap.of([...defaultKeymap, ...historyKeymap]),
           EditorView.lineWrapping,

@@ -58,6 +58,16 @@ CREATE TABLE IF NOT EXISTS tags (
 );
 CREATE INDEX IF NOT EXISTS idx_tags_tag ON tags(tag);
 
+CREATE TABLE IF NOT EXISTS links (
+  from_rel_path TEXT NOT NULL,
+  target        TEXT NOT NULL,
+  target_lc     TEXT NOT NULL,
+  alias         TEXT,
+  PRIMARY KEY (from_rel_path, target),
+  FOREIGN KEY (from_rel_path) REFERENCES pages(rel_path) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_links_target_lc ON links(target_lc);
+
 CREATE TABLE IF NOT EXISTS embeddings (
   rel_path   TEXT NOT NULL,
   level      TEXT NOT NULL,    -- 'page' or 'chunk'
@@ -97,6 +107,20 @@ pub struct RelatedHit {
     pub book: Option<String>,
     pub similarity: f32,
     pub snippet: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PageTitle {
+    pub rel_path: String,
+    pub title: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct BacklinkHit {
+    pub from_rel_path: String,
+    pub from_title: String,
+    pub from_book: Option<String>,
+    pub alias: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -159,9 +183,120 @@ impl Index {
         }
         tx.commit()?;
 
+        // Replace links extracted from the body.
+        self.replace_links(&data.rel_path, &data.body)?;
+
         // Embed only after the page row commits so foreign keys hold.
         self.embed_page(&data.rel_path, &data.body)?;
         Ok(())
+    }
+
+    fn replace_links(&mut self, rel_path: &str, body: &str) -> Result<()> {
+        let parsed = parse_wikilinks(body);
+        let tx = self.conn.transaction()?;
+        tx.execute(
+            "DELETE FROM links WHERE from_rel_path = ?1",
+            params![rel_path],
+        )?;
+        {
+            let mut stmt = tx.prepare(
+                "INSERT OR IGNORE INTO links (from_rel_path, target, target_lc, alias)
+                 VALUES (?1, ?2, ?3, ?4)",
+            )?;
+            for link in &parsed {
+                stmt.execute(params![
+                    rel_path,
+                    link.target,
+                    link.target.to_lowercase(),
+                    link.alias.as_deref(),
+                ])?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn list_page_titles(&self) -> Result<Vec<PageTitle>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT rel_path, title FROM pages ORDER BY title COLLATE NOCASE")?;
+        let rows = stmt.query_map([], |row| {
+            Ok(PageTitle {
+                rel_path: row.get(0)?,
+                title: row.get(1)?,
+            })
+        })?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        Ok(out)
+    }
+
+    pub fn find_backlinks(&self, rel_path: &str) -> Result<Vec<BacklinkHit>> {
+        // Build the set of identifiers other notes might use to link here:
+        // the rel_path, the file stem, and the page's frontmatter title.
+        let row: rusqlite::Result<(String, Option<String>)> = self.conn.query_row(
+            "SELECT title, book FROM pages WHERE rel_path = ?1",
+            params![rel_path],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        );
+        let (title, _book) = match row {
+            Ok(t) => t,
+            Err(_) => return Ok(vec![]),
+        };
+
+        let mut targets: Vec<String> = vec![rel_path.to_string()];
+        let stem = std::path::Path::new(rel_path)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .map(|s| s.to_string());
+        if let Some(s) = stem {
+            targets.push(s);
+        }
+        targets.push(title.clone());
+        targets.dedup();
+        let lower_targets: Vec<String> = targets.iter().map(|t| t.to_lowercase()).collect();
+
+        // Build a SQL IN(?,?,?) with a variable number of params.
+        let placeholders = lower_targets
+            .iter()
+            .enumerate()
+            .map(|(i, _)| format!("?{}", i + 1))
+            .collect::<Vec<_>>()
+            .join(",");
+        let q = format!(
+            "SELECT DISTINCT l.from_rel_path, p.title, p.book, l.alias
+             FROM links l
+             JOIN pages p ON p.rel_path = l.from_rel_path
+             WHERE l.target_lc IN ({placeholders})
+             AND l.from_rel_path != ?{}",
+            lower_targets.len() + 1
+        );
+        let mut stmt = self.conn.prepare(&q)?;
+        let mut params_vec: Vec<&dyn rusqlite::ToSql> = lower_targets
+            .iter()
+            .map(|s| s as &dyn rusqlite::ToSql)
+            .collect();
+        params_vec.push(&rel_path);
+        let rows = stmt.query_map(rusqlite::params_from_iter(params_vec.iter()), |row| {
+            Ok(BacklinkHit {
+                from_rel_path: row.get(0)?,
+                from_title: row.get(1)?,
+                from_book: row.get(2)?,
+                alias: row.get(3)?,
+            })
+        })?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        out.sort_by(|a, b| {
+            a.from_title
+                .to_lowercase()
+                .cmp(&b.from_title.to_lowercase())
+        });
+        Ok(out)
     }
 
     pub fn delete_page(&mut self, rel_path: &str) -> Result<()> {
@@ -414,6 +549,52 @@ impl Index {
         hits.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
         Ok(hits.into_iter().take(limit).map(|(_, h)| h).collect())
     }
+}
+
+#[derive(Debug, Clone)]
+struct ParsedWikilink {
+    target: String,
+    alias: Option<String>,
+}
+
+fn parse_wikilinks(body: &str) -> Vec<ParsedWikilink> {
+    let mut out = Vec::new();
+    let bytes = body.as_bytes();
+    let mut i = 0;
+    while i + 1 < bytes.len() {
+        if bytes[i] == b'[' && bytes[i + 1] == b'[' {
+            // Find matching ]]
+            let start = i + 2;
+            let mut j = start;
+            let mut found_end = None;
+            while j + 1 < bytes.len() {
+                if bytes[j] == b']' && bytes[j + 1] == b']' {
+                    found_end = Some(j);
+                    break;
+                }
+                if bytes[j] == b'\n' {
+                    break;
+                }
+                j += 1;
+            }
+            if let Some(end) = found_end {
+                if let Ok(inner) = std::str::from_utf8(&bytes[start..end]) {
+                    let inner = inner.trim();
+                    if !inner.is_empty() {
+                        let (target, alias) = match inner.split_once('|') {
+                            Some((t, a)) => (t.trim().to_string(), Some(a.trim().to_string())),
+                            None => (inner.to_string(), None),
+                        };
+                        out.push(ParsedWikilink { target, alias });
+                    }
+                }
+                i = end + 2;
+                continue;
+            }
+        }
+        i += 1;
+    }
+    out
 }
 
 fn sanitize_fts_query(input: &str) -> String {

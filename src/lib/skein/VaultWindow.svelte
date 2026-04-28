@@ -14,6 +14,7 @@
   import Sidebar from "./components/Sidebar.svelte";
   import CommandPalette from "./components/CommandPalette.svelte";
   import RelatedStrip from "./components/RelatedStrip.svelte";
+  import LinkedFromStrip from "./components/LinkedFromStrip.svelte";
   import SettingsModal from "./components/SettingsModal.svelte";
 
   function onKeydown(e: KeyboardEvent) {
@@ -83,6 +84,7 @@
                 <EditorPage tab={active} />
               {/if}
             </div>
+            <LinkedFromStrip />
             <RelatedStrip />
           {:else if vaultState.activeBook}
             <div class="sk-tabs-empty">
