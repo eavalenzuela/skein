@@ -1,10 +1,17 @@
-// Embedder trait + Phase 5 fallback implementation.
+// Embedder trait + implementations.
 //
-// The trait keeps the model swappable. A future Phase 5b lands a real
-// BGE-small-en-v1.5 ONNX impl that downloads the model on first run; the
-// rest of the indexer doesn't need to change.
+// Phase 5 shipped HashBagEmbedder as the always-available fallback. Phase 5b
+// adds OnnxBgeEmbedder using fastembed-rs: it downloads BGE-small-en-v1.5
+// (ONNX, 384-dim) on demand into the app data dir and runs inference via
+// the bundled ORT runtime. The rest of the indexer doesn't need to change —
+// only the trait impl behind SharedEmbedder swaps.
 
+use std::path::PathBuf;
 use std::sync::Arc;
+
+use anyhow::{Context, Result};
+use fastembed::{EmbeddingModel, InitOptions, TextEmbedding};
+use parking_lot::Mutex;
 
 pub trait Embedder: Send + Sync {
     /// Stable identifier for this model. Stored alongside vectors so a model
@@ -120,4 +127,56 @@ pub fn bytes_to_vec(b: &[u8]) -> Vec<f32> {
         i += 4;
     }
     out
+}
+
+/// Marker file written into the model cache dir after a successful BGE
+/// download. Lets us detect "model already on disk" at app startup without
+/// touching the network.
+pub const BGE_READY_MARKER: &str = ".bge-ready";
+
+pub fn bge_cache_dir(app_data_dir: &std::path::Path) -> PathBuf {
+    app_data_dir.join("models")
+}
+
+pub struct OnnxBgeEmbedder {
+    inner: Mutex<TextEmbedding>,
+}
+
+impl OnnxBgeEmbedder {
+    /// Load (and download if necessary) BGE-small-en-v1.5 into `cache_dir`.
+    pub fn load_or_download(cache_dir: PathBuf) -> Result<Self> {
+        std::fs::create_dir_all(&cache_dir).ok();
+        let model = TextEmbedding::try_new(
+            InitOptions::new(EmbeddingModel::BGESmallENV15)
+                .with_cache_dir(cache_dir.clone())
+                .with_show_download_progress(false),
+        )
+        .with_context(|| {
+            format!(
+                "loading BGE-small-en-v1.5 (cache dir: {})",
+                cache_dir.display()
+            )
+        })?;
+        // Drop a marker so future startups know the cache is populated.
+        std::fs::write(cache_dir.join(BGE_READY_MARKER), b"1").ok();
+        Ok(Self {
+            inner: Mutex::new(model),
+        })
+    }
+}
+
+impl Embedder for OnnxBgeEmbedder {
+    fn name(&self) -> &str {
+        "bge-small-en-v1.5"
+    }
+    fn dim(&self) -> usize {
+        384
+    }
+    fn embed(&self, text: &str) -> Vec<f32> {
+        let model = self.inner.lock();
+        match model.embed(vec![text.to_string()], None) {
+            Ok(mut v) => v.pop().unwrap_or_else(|| vec![0.0; 384]),
+            Err(_) => vec![0.0; 384],
+        }
+    }
 }

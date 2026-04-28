@@ -53,3 +53,13 @@ export const findRelated = (relPath: string, limit?: number) =>
   invoke<RelatedHit[]>("find_related", { relPath, limit });
 
 export const rebuildIndex = () => invoke<number>("rebuild_index");
+
+export interface EmbeddingModelStatus {
+  name: string;
+  local: boolean;
+}
+
+export const embeddingModelStatus = () => invoke<EmbeddingModelStatus>("embedding_model_status");
+
+export const downloadEmbeddingModel = () =>
+  invoke<EmbeddingModelStatus>("download_embedding_model");

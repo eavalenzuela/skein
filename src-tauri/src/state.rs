@@ -10,7 +10,7 @@ use crate::watcher::DebouncerHandle;
 pub struct AppState {
     inner: Arc<Mutex<Inner>>,
     pub index: Arc<Mutex<Option<Index>>>,
-    pub embedder: SharedEmbedder,
+    pub embedder: Arc<Mutex<SharedEmbedder>>,
 }
 
 #[derive(Default)]
@@ -24,7 +24,7 @@ impl Default for AppState {
         Self {
             inner: Arc::new(Mutex::new(Inner::default())),
             index: Arc::new(Mutex::new(None)),
-            embedder: Arc::new(HashBagEmbedder::new()),
+            embedder: Arc::new(Mutex::new(Arc::new(HashBagEmbedder::new()))),
         }
     }
 }
@@ -45,5 +45,13 @@ impl AppState {
         let mut inner = self.inner.lock();
         inner.watcher = None;
         inner.vault = None;
+    }
+
+    pub fn current_embedder(&self) -> SharedEmbedder {
+        self.embedder.lock().clone()
+    }
+
+    pub fn set_embedder(&self, embedder: SharedEmbedder) {
+        *self.embedder.lock() = embedder;
     }
 }

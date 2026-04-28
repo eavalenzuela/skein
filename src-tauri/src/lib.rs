@@ -15,7 +15,9 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::default())
         .setup(|app| {
-            commands::restore_last_vault(&app.handle().clone());
+            let handle = app.handle().clone();
+            commands::try_load_local_embedding_model(&handle);
+            commands::restore_last_vault(&handle);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -30,6 +32,8 @@ pub fn run() {
             commands::search_pages,
             commands::find_related,
             commands::rebuild_index,
+            commands::embedding_model_status,
+            commands::download_embedding_model,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

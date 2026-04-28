@@ -6,12 +6,13 @@
   import DevControls from "$lib/skein/DevControls.svelte";
   import { tweaks } from "$lib/skein/tweaks.svelte.js";
   import { vaultState, bootstrap } from "$lib/skein/vault.svelte.js";
+  import { bootstrap as bootstrapEmbedder } from "$lib/skein/embedder.svelte.js";
 
   let bootstrapped = $state(false);
   let designPreview = $state(false);
 
   onMount(async () => {
-    await bootstrap();
+    await Promise.all([bootstrap(), bootstrapEmbedder()]);
     bootstrapped = true;
   });
 </script>

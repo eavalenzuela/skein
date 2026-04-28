@@ -7,6 +7,7 @@
     type Scenario,
     type PageFont,
   } from "./tweaks.svelte.js";
+  import { embedderState, downloadModel } from "./embedder.svelte.js";
 
   let open = $state(true);
 
@@ -74,6 +75,34 @@
           <option value={f}>{f}</option>
         {/each}
       </select>
+    </fieldset>
+
+    <fieldset>
+      <legend>Embeddings</legend>
+      <div class="row">
+        <span class="status">
+          {#if embedderState.status?.local}
+            <span class="dot ready"></span>
+            BGE-small-en-v1.5
+          {:else}
+            <span class="dot fallback"></span>
+            hash-bag (fallback)
+          {/if}
+        </span>
+        {#if !embedderState.status?.local}
+          <button
+            class="primary"
+            onclick={downloadModel}
+            disabled={embedderState.busy}
+            title="~130 MB; downloads to your app data directory"
+          >
+            {embedderState.busy ? "downloading…" : "download BGE-small"}
+          </button>
+        {/if}
+      </div>
+      {#if embedderState.error}
+        <p class="err">{embedderState.error}</p>
+      {/if}
     </fieldset>
   {/if}
 </div>
@@ -180,5 +209,53 @@
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 4px;
     font-size: 11.5px;
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    margin-top: 2px;
+  }
+  .status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #ccc;
+    font-size: 11px;
+  }
+  .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #888;
+  }
+  .dot.ready {
+    background: #d6a464;
+  }
+  .dot.fallback {
+    background: #888;
+  }
+  button.primary {
+    background: rgba(214, 164, 100, 0.18);
+    color: #d6a464;
+    border: 1px solid rgba(214, 164, 100, 0.4);
+    border-radius: 5px;
+    font: inherit;
+    font-size: 10.5px;
+    padding: 3px 8px;
+    cursor: pointer;
+  }
+  button.primary:hover {
+    background: rgba(214, 164, 100, 0.28);
+  }
+  button.primary:disabled {
+    opacity: 0.6;
+    cursor: progress;
+  }
+  .err {
+    margin-top: 6px;
+    font-size: 10.5px;
+    color: #c46c4c;
   }
 </style>

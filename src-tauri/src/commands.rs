@@ -1,7 +1,10 @@
 use std::path::PathBuf;
+use std::sync::Arc;
 
-use tauri::{AppHandle, Manager, Runtime, State};
+use serde::Serialize;
+use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 
+use crate::embedder::{self, OnnxBgeEmbedder, SharedEmbedder};
 use crate::index::{self, Index, RelatedHit, SearchHit};
 use crate::settings::{self, Settings};
 use crate::state::AppState;
@@ -18,7 +21,7 @@ fn open_or_init_index<R: Runtime>(
 ) -> Result<Index, String> {
     let dir = app.path().app_data_dir().map_err(err)?;
     let path = index::db_path(&dir);
-    Index::open(&path, state.embedder.clone()).map_err(err)
+    Index::open(&path, state.current_embedder()).map_err(err)
 }
 
 fn rebuild_index_for(idx: &mut Index, vault: &Vault) -> Result<(), String> {
@@ -181,4 +184,85 @@ pub fn restore_last_vault<R: Runtime>(app: &AppHandle<R>) {
     };
     let state = app.state::<AppState>();
     let _ = install_vault(app, &state, vault);
+}
+
+/// At startup, if the BGE marker exists in the cache dir, try to load the
+/// model and install it as the active embedder before any indexing happens.
+/// On failure we silently fall back to HashBagEmbedder.
+pub fn try_load_local_embedding_model<R: Runtime>(app: &AppHandle<R>) {
+    let Ok(dir) = app.path().app_data_dir() else {
+        return;
+    };
+    let cache = embedder::bge_cache_dir(&dir);
+    if !cache.join(embedder::BGE_READY_MARKER).exists() {
+        return;
+    }
+    if let Ok(model) = OnnxBgeEmbedder::load_or_download(cache) {
+        let new_emb: SharedEmbedder = Arc::new(model);
+        let state = app.state::<AppState>();
+        state.set_embedder(new_emb);
+    }
+}
+
+#[derive(Serialize)]
+pub struct EmbeddingModelStatus {
+    pub name: String,
+    pub local: bool, // true = real on-device model (e.g. BGE), false = fallback hash-bag
+}
+
+#[tauri::command]
+pub fn embedding_model_status(state: State<'_, AppState>) -> EmbeddingModelStatus {
+    let emb = state.current_embedder();
+    let name = emb.name().to_string();
+    EmbeddingModelStatus {
+        local: name == "bge-small-en-v1.5",
+        name,
+    }
+}
+
+#[tauri::command]
+pub async fn download_embedding_model<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, AppState>,
+) -> Result<EmbeddingModelStatus, String> {
+    let dir = app.path().app_data_dir().map_err(err)?;
+    let cache = embedder::bge_cache_dir(&dir);
+
+    let _ = app.emit(
+        "embedding-model",
+        &serde_json::json!({"state": "downloading"}),
+    );
+
+    // Loading + download is blocking; run it on a worker thread.
+    let cache_for_task = cache.clone();
+    let onnx =
+        tokio::task::spawn_blocking(move || OnnxBgeEmbedder::load_or_download(cache_for_task))
+            .await
+            .map_err(err)?
+            .map_err(err)?;
+
+    let new_emb: SharedEmbedder = Arc::new(onnx);
+    state.set_embedder(new_emb.clone());
+
+    // Reopen the index against the new embedder, then rebuild from disk so
+    // every page gets re-embedded under the new model name.
+    let path = index::db_path(&dir);
+    let new_idx = Index::open(&path, new_emb).map_err(err)?;
+    {
+        let mut slot = state.index.lock();
+        *slot = Some(new_idx);
+        if let Some(vault) = state.vault() {
+            if let Some(idx) = slot.as_mut() {
+                rebuild_index_for(idx, &vault)?;
+            }
+        }
+    }
+
+    let status = embedding_model_status(state);
+    let _ = app.emit(
+        "embedding-model",
+        &serde_json::json!({"state": "ready", "name": status.name}),
+    );
+    let _ = app.emit("vault-changed", ());
+    Ok(status)
 }
