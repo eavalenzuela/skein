@@ -32,12 +32,10 @@ export interface Tab {
 
 /** Infer the book name from a vault-relative page path. Loose pages return
  * null. Books are one level deep, per the design. */
-function bookOf(relPath: string): string | null {
+export function bookOf(relPath: string): string | null {
   const i = relPath.indexOf("/");
   return i === -1 ? null : relPath.slice(0, i);
 }
-
-let bookContext: string | null = null;
 
 export const tabsState: { tabs: Tab[]; activeId: string | null } = $state({
   tabs: [],
@@ -94,41 +92,58 @@ export async function openTab(
       }
     }
   }
-  // Only an explicit user-driven open shifts the book context. Auto-opens
-  // recurse from inside populateBookContext and must not re-trigger it.
   if (kind === "user") {
-    const newBook = bookOf(page.rel_path);
-    if (newBook !== bookContext) {
-      await populateBookContext(newBook);
-    }
+    await syncBookContextFromState();
   }
 }
 
-/** Load every page in `book` (or every loose page when null) as auto tabs
- * so the user can navigate siblings without leaving the editor. Drops any
- * lingering auto tabs from the previous context that aren't pinned/dirty. */
-export async function populateBookContext(book: string | null) {
-  // Drop stale auto tabs from prior contexts.
+/** Compute the set of "books currently on display" — the parent dirs of
+ * whichever tabs are mounted in the left and right panes. In single-pane
+ * mode that's just the active tab's book; in split-view it's both panes'
+ * books. Used to keep the auto-tab population aligned with what the user
+ * is actually looking at. */
+function displayedBooks(): Set<string | null> {
+  const out = new Set<string | null>();
+  const left = pinned("left");
+  const right = pinned("right");
+  const active = activeTab();
+  if (left) out.add(bookOf(left.rel_path));
+  if (right) out.add(bookOf(right.rel_path));
+  if (!left && !right && active) out.add(bookOf(active.rel_path));
+  if (left && !right && active && active.rel_path !== left.rel_path) {
+    out.add(bookOf(active.rel_path));
+  }
+  if (!left && right && active && active.rel_path !== right.rel_path) {
+    out.add(bookOf(active.rel_path));
+  }
+  return out;
+}
+
+/** Sync the auto-tab pool against `displayedBooks()`: drop auto tabs whose
+ * book is no longer on display, and load sibling pages for every book that
+ * *is* on display. Called after every state change that could shift which
+ * pages are visible. */
+export async function syncBookContextFromState() {
+  const books = displayedBooks();
   for (const t of [...tabsState.tabs]) {
     if (
       t.kind === "auto" &&
       t.pin == null &&
       !isDirty(t) &&
-      bookOf(t.rel_path) !== book
+      !books.has(bookOf(t.rel_path))
     ) {
       tabsState.tabs = tabsState.tabs.filter((tt) => tt !== t);
     }
   }
-  bookContext = book;
-  try {
-    const pages = book == null ? await listLoosePages() : await listPagesInBook(book);
-    for (const p of pages) {
-      // openTab no-ops if already open; for auto siblings we don't change
-      // the active tab — that stays on the user's clicked page.
-      await openTab({ rel_path: p.rel_path, title: p.title }, "auto");
+  for (const b of books) {
+    try {
+      const pages = b == null ? await listLoosePages() : await listPagesInBook(b);
+      for (const p of pages) {
+        await openTab({ rel_path: p.rel_path, title: p.title }, "auto");
+      }
+    } catch {
+      // Listing failed (book deleted under us, etc.) — skip.
     }
-  } catch {
-    // Listing failed (book deleted under us, etc.) — drop the context.
   }
 }
 
@@ -147,6 +162,7 @@ export function closeTab(relPath: string) {
   if (tabsState.activeId === relPath) {
     tabsState.activeId = tabsState.tabs[tabsState.tabs.length - 1]?.rel_path ?? null;
   }
+  void syncBookContextFromState();
 }
 
 export function setActive(relPath: string) {
@@ -175,6 +191,7 @@ export function cyclePin(relPath: string) {
   const tab = tabsState.tabs[i];
   if (tab.pin) {
     tab.pin = null;
+    void syncBookContextFromState();
     return;
   }
   const leftTaken = tabsState.tabs.some((t) => t !== tab && t.pin === "left");
@@ -187,11 +204,33 @@ export function cyclePin(relPath: string) {
     if (other !== tab && other.pin === side) other.pin = null;
   }
   tab.pin = side;
+  void syncBookContextFromState();
 }
 
 export function unpin(relPath: string) {
   const i = findIndex(relPath);
-  if (i !== -1) tabsState.tabs[i].pin = null;
+  if (i !== -1) {
+    tabsState.tabs[i].pin = null;
+    void syncBookContextFromState();
+  }
+}
+
+/** Select a tab in a specific pane. Pinned-side click changes that pin to
+ * the chosen tab; unpinned-side click just sets the global active. */
+export function selectInPane(side: "left" | "right", relPath: string) {
+  const i = findIndex(relPath);
+  if (i === -1) return;
+  const sidePin = pinned(side);
+  if (sidePin) {
+    for (const t of tabsState.tabs) {
+      if (t.pin === side && t.rel_path !== relPath) t.pin = null;
+    }
+    tabsState.tabs[i].pin = side;
+    tabsState.activeId = relPath;
+  } else {
+    tabsState.activeId = relPath;
+  }
+  void syncBookContextFromState();
 }
 
 /** Open `page` (if not already open) and pin it to `side`, replacing any
@@ -210,6 +249,7 @@ export async function replaceAtPin(
     tabsState.tabs[i].pin = side;
     tabsState.activeId = page.rel_path;
   }
+  await syncBookContextFromState();
 }
 
 export function setBody(relPath: string, body: string) {
