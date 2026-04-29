@@ -20,7 +20,16 @@
     <ul>
       {#each pages as p (p.rel_path)}
         <li>
-          <button onclick={() => openTab(p)}>
+          <button
+            onclick={() => openTab(p)}
+            draggable="true"
+            ondragstart={(e) => {
+              if (!e.dataTransfer) return;
+              const payload = JSON.stringify({ rel_path: p.rel_path, title: p.title });
+              e.dataTransfer.setData("application/x-skein-page", payload);
+              e.dataTransfer.effectAllowed = "copyMove";
+            }}
+          >
             <span class="ttl">{p.title}</span>
             <span class="rp">{p.rel_path}</span>
           </button>

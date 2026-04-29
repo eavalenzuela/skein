@@ -2,13 +2,23 @@
   import "./styles.css";
   import type { Theme, ShelfStyle, SidebarMode, PageFont } from "./tweaks.svelte.js";
   import { vaultState, selectBook } from "./vault.svelte.js";
-  import { tabsState, setActive, closeTab, togglePin, pinned, activeTab } from "./tabs.svelte.js";
+  import {
+    tabsState,
+    setActive,
+    closeTab,
+    togglePin,
+    pinned,
+    activeTab,
+    openTab,
+    replaceAtPin,
+  } from "./tabs.svelte.js";
   import { searchUi, openSearch, closeSearch } from "./searchUi.svelte.js";
   import { settingsUi, openSettings, closeSettings } from "./settingsUi.svelte.js";
   import Titlebar from "./components/Titlebar.svelte";
   import VaultBookshelf from "./components/VaultBookshelf.svelte";
   import LiveTabs from "./components/LiveTabs.svelte";
   import EditorPage from "./components/EditorPage.svelte";
+  import PinPlaceholder from "./components/PinPlaceholder.svelte";
   import PageList from "./components/PageList.svelte";
   import EmptyDesk from "./components/EmptyDesk.svelte";
   import Sidebar from "./components/Sidebar.svelte";
@@ -55,8 +65,57 @@
 
   let leftPin = $derived(pinned("left"));
   let rightPin = $derived(pinned("right"));
-  let isSplit = $derived(!!leftPin && !!rightPin);
+  let isSplit = $derived(!!leftPin || !!rightPin);
   let active = $derived(activeTab());
+
+  // Tab to render in the unpinned pane: the active tab when it's not the
+  // tab pinned to the *other* side. Otherwise the unpinned pane is empty.
+  function unpinnedPaneTab(otherSidePin: typeof leftPin) {
+    if (!active) return undefined;
+    if (otherSidePin && otherSidePin.rel_path === active.rel_path) return undefined;
+    return active;
+  }
+
+  function parsePagePayload(dt: DataTransfer | null) {
+    if (!dt) return null;
+    const raw = dt.getData("application/x-skein-page");
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw) as { rel_path: string; title: string };
+      if (parsed.rel_path && parsed.title) return parsed;
+    } catch {
+      /* fallthrough */
+    }
+    return null;
+  }
+
+  let dragSide = $state<"left" | "right" | null>(null);
+
+  function onPaneDragOver(ev: DragEvent, side: "left" | "right") {
+    if (!ev.dataTransfer) return;
+    const types = Array.from(ev.dataTransfer.types ?? []);
+    if (!types.includes("application/x-skein-page")) return;
+    ev.preventDefault();
+    ev.dataTransfer.dropEffect = "copy";
+    dragSide = side;
+  }
+
+  async function onPaneDrop(ev: DragEvent, side: "left" | "right") {
+    const payload = parsePagePayload(ev.dataTransfer);
+    if (!payload) return;
+    ev.preventDefault();
+    dragSide = null;
+    const sidePin = side === "left" ? leftPin : rightPin;
+    if (sidePin) {
+      await replaceAtPin(side, payload);
+    } else {
+      await openTab(payload);
+    }
+  }
+
+  function onPaneDragLeave(side: "left" | "right") {
+    if (dragSide === side) dragSide = null;
+  }
 </script>
 
 <svelte:window onkeydown={onKeydown} />
@@ -77,9 +136,37 @@
               onPin={togglePin}
             />
             <div class="sk-surface">
-              {#if isSplit && leftPin && rightPin}
-                <EditorPage tab={leftPin} />
-                <EditorPage tab={rightPin} />
+              {#if isSplit}
+                {@const leftTab = leftPin ?? unpinnedPaneTab(rightPin)}
+                {@const rightTab = rightPin ?? unpinnedPaneTab(leftPin)}
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <div
+                  class="pane"
+                  class:drag-over={dragSide === "left"}
+                  ondragover={(e) => onPaneDragOver(e, "left")}
+                  ondragleave={() => onPaneDragLeave("left")}
+                  ondrop={(e) => onPaneDrop(e, "left")}
+                >
+                  {#if leftTab}
+                    <EditorPage tab={leftTab} />
+                  {:else}
+                    <PinPlaceholder side="left" />
+                  {/if}
+                </div>
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <div
+                  class="pane"
+                  class:drag-over={dragSide === "right"}
+                  ondragover={(e) => onPaneDragOver(e, "right")}
+                  ondragleave={() => onPaneDragLeave("right")}
+                  ondrop={(e) => onPaneDrop(e, "right")}
+                >
+                  {#if rightTab}
+                    <EditorPage tab={rightTab} />
+                  {:else}
+                    <PinPlaceholder side="right" />
+                  {/if}
+                </div>
               {:else if active}
                 <EditorPage tab={active} />
               {/if}
@@ -134,5 +221,17 @@
   }
   .bare-link:hover {
     color: var(--ink);
+  }
+  .pane {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    transition: outline-color 0.12s ease;
+    outline: 2px solid transparent;
+    outline-offset: -2px;
+  }
+  .pane.drag-over {
+    outline-color: var(--accent-edge, oklch(0.78 0.13 75));
   }
 </style>

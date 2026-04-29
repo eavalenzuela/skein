@@ -100,6 +100,24 @@ export function togglePin(relPath: string, side: "left" | "right") {
   tab.pin = tab.pin === side ? null : side;
 }
 
+/** Open `page` (if not already open) and pin it to `side`, replacing any
+ * other tab currently pinned there. Used by drag-onto-pinned-pane. */
+export async function replaceAtPin(
+  side: "left" | "right",
+  page: Pick<Page, "rel_path" | "title">,
+) {
+  await openTab(page);
+  // Clear the existing pin on this side, then pin the new tab.
+  for (const t of tabsState.tabs) {
+    if (t.pin === side && t.rel_path !== page.rel_path) t.pin = null;
+  }
+  const i = findIndex(page.rel_path);
+  if (i !== -1) {
+    tabsState.tabs[i].pin = side;
+    tabsState.activeId = page.rel_path;
+  }
+}
+
 export function setBody(relPath: string, body: string) {
   const i = findIndex(relPath);
   if (i === -1) return;
