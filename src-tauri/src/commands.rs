@@ -9,6 +9,7 @@ use crate::attachments;
 use crate::autotag;
 use crate::books::{self, DeleteResult};
 use crate::git_sync::{self, AuthKind, GitStatus, PullResult};
+use crate::pages;
 use crate::chat::{self, ChatMessageIn};
 use crate::daily::{self, DailyResult};
 use crate::embedder::{self, OnnxBgeEmbedder, SharedEmbedder};
@@ -165,6 +166,56 @@ pub fn delete_book<R: Runtime>(
     }
     rebuild_index_and_emit(&app, &state)?;
     Ok(result)
+}
+
+#[tauri::command]
+pub fn create_page<R: Runtime>(
+    app: AppHandle<R>,
+    book: Option<String>,
+    title: String,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    let vault = state.vault().ok_or("no vault open")?;
+    let rel = pages::create_page(&vault, book.as_deref(), &title).map_err(err)?;
+    if let Some(data) = vault::read_page_data(&vault, &vault.root.join(&rel)) {
+        if let Some(idx) = state.index.lock().as_mut() {
+            let _ = idx.upsert_page(&data);
+        }
+    }
+    let _ = app.emit("vault-changed", ());
+    Ok(rel)
+}
+
+#[tauri::command]
+pub fn rename_page<R: Runtime>(
+    app: AppHandle<R>,
+    rel_path: String,
+    new_title: String,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    let vault = state.vault().ok_or("no vault open")?;
+    let new_rel = pages::rename_page(&vault, &rel_path, &new_title).map_err(err)?;
+    // Drop the old row; rebuild touches every page so wikilink edits land.
+    if let Some(idx) = state.index.lock().as_mut() {
+        let _ = idx.delete_page(&rel_path);
+    }
+    rebuild_index_and_emit(&app, &state)?;
+    Ok(new_rel)
+}
+
+#[tauri::command]
+pub fn delete_page_command<R: Runtime>(
+    app: AppHandle<R>,
+    rel_path: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let vault = state.vault().ok_or("no vault open")?;
+    pages::delete_page(&vault, &rel_path).map_err(err)?;
+    if let Some(idx) = state.index.lock().as_mut() {
+        let _ = idx.delete_page(&rel_path);
+    }
+    let _ = app.emit("vault-changed", ());
+    Ok(())
 }
 
 #[tauri::command]

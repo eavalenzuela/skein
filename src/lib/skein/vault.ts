@@ -38,6 +38,13 @@ export const deleteBook = (name: string, alsoDeletePages: boolean) =>
 
 export const setBookOrder = (names: string[]) =>
   invoke<void>("set_book_order", { names });
+
+export const createPage = (book: string | null, title: string) =>
+  invoke<string>("create_page", { book, title });
+export const renamePage = (relPath: string, newTitle: string) =>
+  invoke<string>("rename_page", { relPath, newTitle });
+export const deletePage = (relPath: string) =>
+  invoke<void>("delete_page_command", { relPath });
 export const listLoosePages = () => invoke<Page[]>("list_loose_pages");
 export const listPagesInBook = (book: string) => invoke<Page[]>("list_pages_in_book", { book });
 export const readPage = (relPath: string) => invoke<string>("read_page", { relPath });

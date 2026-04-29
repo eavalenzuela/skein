@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Book } from "../vault.js";
-  import { createBook, deleteBook, renameBook, setBookOrder } from "../vault.js";
+  import { createBook, deleteBook, renameBook, setBookOrder, createPage } from "../vault.js";
+  import { openTab } from "../tabs.svelte.js";
   import type { ShelfStyle, Theme } from "../tweaks.svelte.js";
   import { spineHeight, spineHue, spineShade, spineWidth } from "../spineHash.js";
   import { vaultState, selectBook } from "../vault.svelte.js";
@@ -90,6 +91,12 @@
       y: ev.clientY,
       items: [
         { label: "Open", action: () => selectBook(b.name) },
+        {
+          label: `New page in ${b.name}…`,
+          action: () => {
+            void newPageIn(b.name);
+          },
+        },
         { separator: true, label: "", action: () => {} },
         {
           label: "Rename…",
@@ -108,6 +115,18 @@
         },
       ],
     };
+  }
+
+  async function newPageIn(book: string) {
+    const title = prompt(`New page title in "${book}":`);
+    if (!title || !title.trim()) return;
+    try {
+      const rel = await createPage(book, title.trim());
+      const stem = rel.split("/").pop()?.replace(/\.md$/, "") ?? rel;
+      await openTab({ rel_path: rel, title: stem });
+    } catch (e) {
+      console.error("createPage", e);
+    }
   }
 
   function openShelfMenu(ev: MouseEvent) {

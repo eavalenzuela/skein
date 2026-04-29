@@ -9,6 +9,7 @@ mod daily;
 mod embedder;
 mod git_sync;
 mod index;
+mod pages;
 mod secrets;
 mod settings;
 mod state;
@@ -71,6 +72,9 @@ pub fn run() {
             commands::rename_book,
             commands::delete_book,
             commands::set_book_order,
+            commands::create_page,
+            commands::rename_page,
+            commands::delete_page_command,
             commands::list_loose_pages,
             commands::list_pages_in_book,
             commands::read_page,

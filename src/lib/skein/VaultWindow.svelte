@@ -198,11 +198,19 @@
                 &laquo; back to Folio
               </button>
             </div>
-            <PageList title={vaultState.activeBook} pages={vaultState.pagesInActiveBook} />
+            <PageList
+              title={vaultState.activeBook}
+              pages={vaultState.pagesInActiveBook}
+              book={vaultState.activeBook}
+            />
           {:else}
             <div class="sk-tabs-empty">No tabs open</div>
             {#if vaultState.loosePages.length > 0}
-              <PageList title="Folio — loose pages" pages={vaultState.loosePages} />
+              <PageList
+                title="Folio — loose pages"
+                pages={vaultState.loosePages}
+                book={null}
+              />
             {:else}
               <EmptyDesk />
             {/if}
