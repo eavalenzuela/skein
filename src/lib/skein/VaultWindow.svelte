@@ -300,8 +300,6 @@
     outline-color: var(--accent-edge, oklch(0.78 0.13 75));
   }
   /* In split-tab mode each pane has its own LiveTabs strip on top, so the
-     surface no longer needs the implicit gap below the shared strip. */
-  .sk-surface.split-bar {
-    /* hook for any future tweaks; layout falls out of .pane already */
-  }
+     surface layout falls out of .pane already; no extra rules needed.
+     Hook removed — the class is harmless to keep in markup. */
 </style>
