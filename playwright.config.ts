@@ -11,6 +11,11 @@ export default defineConfig({
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
+  expect: {
+    // Visual regression: tolerate minor rendering jitter (font hinting,
+    // sub-pixel) but catch real layout drift.
+    toHaveScreenshot: { maxDiffPixelRatio: 0.02, threshold: 0.2 },
+  },
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
   ],
