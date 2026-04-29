@@ -12,7 +12,10 @@ use keyring::Entry;
 const SERVICE: &str = "skein";
 
 pub fn allowed(name: &str) -> bool {
-    matches!(name, "anthropic_api_key" | "voyage_api_key")
+    matches!(
+        name,
+        "anthropic_api_key" | "voyage_api_key" | "git_token"
+    )
 }
 
 fn entry(name: &str) -> Result<Entry> {

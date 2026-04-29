@@ -7,6 +7,7 @@ use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 use crate::archive;
 use crate::attachments;
 use crate::autotag;
+use crate::git_sync::{self, AuthKind, GitStatus, PullResult};
 use crate::chat::{self, ChatMessageIn};
 use crate::daily::{self, DailyResult};
 use crate::embedder::{self, OnnxBgeEmbedder, SharedEmbedder};
@@ -351,6 +352,74 @@ pub fn export_vault<R: Runtime>(
     let index_db = index::db_path(&app_data_dir);
     let dest = PathBuf::from(&dest_path);
     archive::export_vault(&vault.root, &index_db, &dest).map_err(err)
+}
+
+fn current_git_config<R: Runtime>(app: &AppHandle<R>) -> (String, AuthKind, Option<String>) {
+    let s = settings::load(app);
+    let branch = s.git_branch.unwrap_or_else(|| "main".to_string());
+    let auth = AuthKind::from_str(s.git_auth_kind.as_deref().unwrap_or("none"));
+    let token = match auth {
+        AuthKind::Token => secrets::read("git_token"),
+        _ => None,
+    };
+    (branch, auth, token)
+}
+
+#[tauri::command]
+pub fn git_status(state: State<'_, AppState>) -> Result<GitStatus, String> {
+    let vault = state.vault().ok_or("no vault open")?;
+    git_sync::status(&vault.root).map_err(err)
+}
+
+#[tauri::command]
+pub fn git_set_remote<R: Runtime>(
+    app: AppHandle<R>,
+    remote_url: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let vault = state.vault().ok_or("no vault open")?;
+    git_sync::ensure_repo_with_remote(&vault.root, &remote_url).map_err(err)?;
+    let mut s = settings::load(&app);
+    s.git_remote_url = if remote_url.is_empty() {
+        None
+    } else {
+        Some(remote_url)
+    };
+    settings::save(&app, &s).map_err(err)
+}
+
+#[tauri::command]
+pub fn git_pull<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, AppState>,
+) -> Result<PullResult, String> {
+    let vault = state.vault().ok_or("no vault open")?;
+    let (branch, auth, token) = current_git_config(&app);
+    git_sync::pull(&vault.root, &branch, auth, token).map_err(err)
+}
+
+#[tauri::command]
+pub fn git_push<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let vault = state.vault().ok_or("no vault open")?;
+    let (branch, auth, token) = current_git_config(&app);
+    git_sync::push(&vault.root, &branch, auth, token).map_err(err)
+}
+
+#[tauri::command]
+pub fn git_commit_all(
+    message: String,
+    state: State<'_, AppState>,
+) -> Result<bool, String> {
+    let vault = state.vault().ok_or("no vault open")?;
+    let msg = if message.trim().is_empty() {
+        "Skein update".to_string()
+    } else {
+        message
+    };
+    git_sync::commit_all(&vault.root, &msg).map_err(err)
 }
 
 #[tauri::command]

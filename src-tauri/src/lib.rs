@@ -6,6 +6,7 @@ mod chunker;
 mod commands;
 mod daily;
 mod embedder;
+mod git_sync;
 mod index;
 mod secrets;
 mod settings;
@@ -64,6 +65,11 @@ pub fn run() {
             commands::save_attachment_from_path,
             commands::export_vault,
             commands::open_vault_from_archive,
+            commands::git_status,
+            commands::git_set_remote,
+            commands::git_pull,
+            commands::git_push,
+            commands::git_commit_all,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

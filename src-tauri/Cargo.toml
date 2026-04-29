@@ -36,6 +36,7 @@ futures-util = "0.3"
 uuid = { version = "1", features = ["v4"] }
 serde_yml = "0.0.12"
 zip = { version = "2", default-features = false, features = ["deflate"] }
+git2 = { version = "0.20", default-features = false, features = ["https", "ssh", "vendored-libgit2", "vendored-openssl"] }
 
 [profile.release]
 panic = "abort"

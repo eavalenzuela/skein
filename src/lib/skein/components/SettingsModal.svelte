@@ -22,7 +22,14 @@
     clearSecret,
     getSettings,
     setSettings,
+    gitStatus,
+    gitSetRemote,
+    gitPull,
+    gitPush,
+    gitCommitAll,
     type SecretName,
+    type GitStatus,
+    type GitPullResult,
   } from "../settings.js";
   import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
   import { isPermissionGranted, requestPermission } from "@tauri-apps/plugin-notification";
@@ -93,18 +100,128 @@
 
   async function refreshSecrets() {
     try {
-      [anthropicSet, voyageSet] = await Promise.all([
+      [anthropicSet, voyageSet, gitTokenSet] = await Promise.all([
         hasSecret("anthropic_api_key"),
         hasSecret("voyage_api_key"),
+        hasSecret("git_token"),
       ]);
     } catch (e) {
       secretError = String(e);
     }
   }
 
+  // --- Sync (Phase 13) ---
+  let gitTokenSet = $state(false);
+  let gitTokenInput = $state("");
+  let gitRemote = $state("");
+  let gitBranch = $state("main");
+  let gitAuthKind = $state<"none" | "token" | "ssh-agent">("none");
+  let gitStatusData = $state<GitStatus | null>(null);
+  let gitBusy = $state(false);
+  let gitMessage = $state<string | null>(null);
+  let gitError = $state<string | null>(null);
+  let gitCommitMsg = $state("");
+
+  async function loadGitConfig() {
+    try {
+      const s = await getSettings();
+      if (s.git_remote_url) gitRemote = s.git_remote_url;
+      if (s.git_branch) gitBranch = s.git_branch;
+      if (s.git_auth_kind) {
+        gitAuthKind = (s.git_auth_kind as typeof gitAuthKind) || "none";
+      }
+    } catch (e) {
+      gitError = String(e);
+    }
+  }
+
+  async function refreshGitStatus() {
+    try {
+      gitStatusData = await gitStatus();
+    } catch (e) {
+      gitError = String(e);
+    }
+  }
+
+  async function saveGitConfig() {
+    gitBusy = true;
+    gitError = null;
+    gitMessage = null;
+    try {
+      await setSettings({
+        git_remote_url: gitRemote.trim(),
+        git_branch: gitBranch.trim() || "main",
+        git_auth_kind: gitAuthKind,
+      });
+      if (gitRemote.trim()) {
+        await gitSetRemote(gitRemote.trim());
+      }
+      if (gitTokenInput && gitAuthKind === "token") {
+        await setSecret("git_token", gitTokenInput);
+        gitTokenInput = "";
+        gitTokenSet = true;
+      }
+      await refreshGitStatus();
+      gitMessage = "Saved.";
+    } catch (e) {
+      gitError = String(e);
+    } finally {
+      gitBusy = false;
+    }
+  }
+
+  async function runPull() {
+    gitBusy = true;
+    gitError = null;
+    gitMessage = null;
+    try {
+      const r: GitPullResult = await gitPull();
+      gitMessage =
+        r.kind === "conflicts"
+          ? `Pulled with conflicts: ${r.conflicted.join(", ")}`
+          : `Pull: ${r.kind}.`;
+      await refreshGitStatus();
+    } catch (e) {
+      gitError = String(e);
+    } finally {
+      gitBusy = false;
+    }
+  }
+
+  async function runPush() {
+    gitBusy = true;
+    gitError = null;
+    gitMessage = null;
+    try {
+      // Auto-commit any dirty files before pushing so users don't see a
+      // silent "nothing pushed" when they had unsaved changes.
+      const msg = gitCommitMsg.trim() || "Skein update";
+      const committed = await gitCommitAll(msg);
+      await gitPush();
+      gitMessage = committed ? `Pushed (committed: ${msg}).` : "Pushed.";
+      gitCommitMsg = "";
+      await refreshGitStatus();
+    } catch (e) {
+      gitError = String(e);
+    } finally {
+      gitBusy = false;
+    }
+  }
+
+  async function clearGitToken() {
+    try {
+      await clearSecret("git_token");
+      gitTokenSet = false;
+    } catch (e) {
+      gitError = String(e);
+    }
+  }
+
   onMount(() => {
     void refreshSecrets();
     void loadDaily();
+    void loadGitConfig();
+    void refreshGitStatus();
   });
 
   async function saveSecret(name: SecretName, value: string) {
@@ -262,6 +379,99 @@
           {/if}
         {/if}
       </section>
+
+      {#if vaultState.vault}
+        <section>
+          <h3>Sync</h3>
+          <div class="grid">
+            <div class="grid-label">Remote URL</div>
+            <input
+              type="text"
+              bind:value={gitRemote}
+              placeholder="git@github.com:you/notes.git or https://github.com/you/notes.git"
+            />
+            <div class="grid-label">Branch</div>
+            <input type="text" bind:value={gitBranch} placeholder="main" />
+            <div class="grid-label">Auth</div>
+            <div class="radios">
+              <label class="opt">
+                <input type="radio" bind:group={gitAuthKind} value="none" /> none
+              </label>
+              <label class="opt">
+                <input type="radio" bind:group={gitAuthKind} value="token" /> HTTPS token
+              </label>
+              <label class="opt">
+                <input type="radio" bind:group={gitAuthKind} value="ssh-agent" /> ssh-agent
+              </label>
+            </div>
+            {#if gitAuthKind === "token"}
+              <div class="grid-label">Token</div>
+              <div class="row">
+                {#if gitTokenSet}
+                  <span class="muted">stored in keychain</span>
+                  <button onclick={clearGitToken}>clear</button>
+                {:else}
+                  <input
+                    type="password"
+                    bind:value={gitTokenInput}
+                    placeholder="paste personal access token"
+                  />
+                {/if}
+              </div>
+            {/if}
+          </div>
+          <div class="row">
+            <div class="actions">
+              <button onclick={saveGitConfig} disabled={gitBusy}>save</button>
+              <button onclick={refreshGitStatus} disabled={gitBusy}>refresh status</button>
+              <button onclick={runPull} disabled={gitBusy}>pull</button>
+              <button onclick={runPush} disabled={gitBusy}>push</button>
+            </div>
+          </div>
+          <div class="row">
+            <input
+              type="text"
+              bind:value={gitCommitMsg}
+              placeholder="commit message for push (optional)"
+            />
+          </div>
+
+          {#if gitStatusData}
+            <div class="kv">
+              {#if !gitStatusData.initialized}
+                <div class="v muted">Not a git repo yet — enter a remote URL and save.</div>
+              {:else}
+                <div class="v">
+                  <span class="mono">{gitStatusData.branch ?? "(detached)"}</span>
+                  {#if gitStatusData.ahead || gitStatusData.behind}
+                    — ahead {gitStatusData.ahead}, behind {gitStatusData.behind}
+                  {/if}
+                </div>
+                {#if gitStatusData.remote_url}
+                  <div class="v muted mono">{gitStatusData.remote_url}</div>
+                {/if}
+                {#if gitStatusData.conflicted.length}
+                  <div class="v danger">
+                    Conflicts ({gitStatusData.conflicted.length}):
+                    {gitStatusData.conflicted.join(", ")}
+                  </div>
+                {/if}
+                {#if gitStatusData.dirty.length}
+                  <div class="v muted">
+                    Dirty ({gitStatusData.dirty.length}):
+                    {gitStatusData.dirty
+                      .slice(0, 8)
+                      .map((d) => `${d.state} ${d.path}`)
+                      .join(", ")}{gitStatusData.dirty.length > 8 ? "…" : ""}
+                  </div>
+                {/if}
+              {/if}
+            </div>
+          {/if}
+          {#if gitMessage}<p class="muted">{gitMessage}</p>{/if}
+          {#if gitError}<p class="danger">{gitError}</p>{/if}
+        </section>
+      {/if}
 
       <section>
         <h3>Appearance</h3>

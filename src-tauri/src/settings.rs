@@ -15,6 +15,9 @@ pub struct Settings {
     pub daily_book: Option<String>,
     pub daily_template: Option<String>,
     pub daily_reminder_time: Option<String>,
+    pub git_remote_url: Option<String>,
+    pub git_branch: Option<String>,
+    pub git_auth_kind: Option<String>,
 }
 
 #[derive(Deserialize, Default, Clone, Debug)]
@@ -26,6 +29,9 @@ pub struct SettingsPatch {
     pub daily_book: Option<String>,
     pub daily_template: Option<String>,
     pub daily_reminder_time: Option<String>,
+    pub git_remote_url: Option<String>,
+    pub git_branch: Option<String>,
+    pub git_auth_kind: Option<String>,
 }
 
 impl Settings {
@@ -51,6 +57,15 @@ impl Settings {
         if let Some(v) = patch.daily_reminder_time {
             // Empty string clears it.
             self.daily_reminder_time = if v.is_empty() { None } else { Some(v) };
+        }
+        if let Some(v) = patch.git_remote_url {
+            self.git_remote_url = if v.is_empty() { None } else { Some(v) };
+        }
+        if let Some(v) = patch.git_branch {
+            self.git_branch = if v.is_empty() { None } else { Some(v) };
+        }
+        if let Some(v) = patch.git_auth_kind {
+            self.git_auth_kind = if v.is_empty() { None } else { Some(v) };
         }
     }
 }
