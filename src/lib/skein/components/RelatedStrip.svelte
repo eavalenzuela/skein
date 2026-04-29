@@ -72,7 +72,10 @@
     <div class="label">Related</div>
     <div class="hits">
       {#if loading && hits.length === 0}
-        <span class="empty">finding…</span>
+        <span class="skeleton" aria-hidden="true"></span>
+        <span class="skeleton" aria-hidden="true"></span>
+        <span class="skeleton" aria-hidden="true"></span>
+        <span class="empty sr-only" role="status">finding related pages…</span>
       {:else}
         {#each hits as hit, i (hit.rel_path)}
           <button
@@ -125,6 +128,39 @@
     color: var(--ink-4);
     font-size: 11.5px;
     font-style: italic;
+  }
+  .skeleton {
+    display: inline-block;
+    height: 24px;
+    width: 110px;
+    border-radius: 12px;
+    background: linear-gradient(
+      90deg,
+      oklch(from var(--page) calc(l + 0.01) c h),
+      oklch(from var(--page) calc(l + 0.04) c h),
+      oklch(from var(--page) calc(l + 0.01) c h)
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.4s ease-in-out infinite;
+    flex-shrink: 0;
+  }
+  @keyframes shimmer {
+    0% {
+      background-position: -100% 0;
+    }
+    100% {
+      background-position: 100% 0;
+    }
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
   .pill {
     display: inline-flex;

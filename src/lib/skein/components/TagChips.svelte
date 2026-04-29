@@ -124,7 +124,9 @@
   <div class="tag-chips" role="region" aria-label="Tag suggestions">
     <span class="label">Suggested tags</span>
     {#if loading && suggestions.length === 0}
-      <span class="muted">thinking…</span>
+      <span class="skeleton" aria-hidden="true"></span>
+      <span class="skeleton" aria-hidden="true"></span>
+      <span class="muted sr-only" role="status">thinking…</span>
     {:else}
       {#each suggestions as tag (tag)}
         <span class="chip">
@@ -204,5 +206,37 @@
     color: oklch(0.65 0.18 25);
     font-size: 11px;
     margin-left: 6px;
+  }
+  .skeleton {
+    display: inline-block;
+    height: 18px;
+    width: 64px;
+    border-radius: 9px;
+    background: linear-gradient(
+      90deg,
+      oklch(from var(--page) calc(l + 0.02) c h),
+      oklch(from var(--page) calc(l + 0.05) c h),
+      oklch(from var(--page) calc(l + 0.02) c h)
+    );
+    background-size: 200% 100%;
+    animation: tag-shimmer 1.4s ease-in-out infinite;
+  }
+  @keyframes tag-shimmer {
+    0% {
+      background-position: -100% 0;
+    }
+    100% {
+      background-position: 100% 0;
+    }
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
 </style>

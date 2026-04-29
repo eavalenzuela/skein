@@ -356,6 +356,8 @@
     outline: none;
     padding: 0;
     min-height: 38px;
+    max-height: 240px;
+    overflow-y: auto;
   }
   .sk-side textarea::placeholder {
     color: var(--ink-3);

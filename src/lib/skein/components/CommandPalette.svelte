@@ -11,6 +11,7 @@
   import { openSettings } from "../settingsUi.svelte.js";
   import { close as closeVaultStore, vaultState } from "../vault.svelte.js";
   import { downloadModel } from "../embedder.svelte.js";
+  import { focusTrap } from "../focusTrap.js";
 
   interface Command {
     id: string;
@@ -188,13 +189,19 @@
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="palette-overlay" onclick={closeSearch}>
+<div
+  class="palette-overlay"
+  onclick={closeSearch}
+  onkeydown={(e) => e.key === "Escape" && closeSearch()}
+>
   <div
     class="palette"
     onclick={(e) => e.stopPropagation()}
     role="dialog"
-    aria-label="Search pages"
+    aria-label="Search pages and run commands"
+    aria-modal="true"
     tabindex="-1"
+    use:focusTrap
   >
     <input
       bind:this={inputEl}
@@ -204,6 +211,7 @@
       onkeydown={onKeydown}
       autocomplete="off"
       spellcheck="false"
+      aria-label="Search pages or commands"
     />
     <div class="hint-row">
       <span

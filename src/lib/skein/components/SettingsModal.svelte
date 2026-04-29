@@ -33,6 +33,7 @@
   } from "../settings.js";
   import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
   import { isPermissionGranted, requestPermission } from "@tauri-apps/plugin-notification";
+  import { focusTrap } from "../focusTrap.js";
 
   interface Props {
     onClose: () => void;
@@ -336,12 +337,14 @@
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="overlay" onclick={onClose}>
+<div class="overlay" onclick={onClose} onkeydown={(e) => e.key === "Escape" && onClose()}>
   <div
     class="modal"
     role="dialog"
     aria-label="Settings"
+    aria-modal="true"
     tabindex="-1"
+    use:focusTrap
     onclick={(e) => e.stopPropagation()}
   >
     <header>

@@ -3,6 +3,7 @@
   import { createPage, renamePage, deletePage } from "../vault.js";
   import { openTab } from "../tabs.svelte.js";
   import ContextMenu, { type MenuItem } from "./ContextMenu.svelte";
+  import { focusTrap } from "../focusTrap.js";
 
   interface Props {
     pages: Page[];
@@ -235,11 +236,20 @@
 {#if pendingDelete}
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="overlay" onclick={() => (pendingDelete = null)}>
+  <div
+    class="overlay"
+    onclick={() => {
+      if (!deleting) pendingDelete = null;
+    }}
+    onkeydown={(e) => e.key === "Escape" && !deleting && (pendingDelete = null)}
+  >
     <div
       class="modal"
       role="dialog"
       aria-label="Delete page"
+      aria-modal="true"
+      tabindex="-1"
+      use:focusTrap
       onclick={(e) => e.stopPropagation()}
     >
       <h3>Delete "{pendingDelete.title}"?</h3>
