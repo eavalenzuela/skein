@@ -134,24 +134,24 @@ pub fn parse_dismissed_tags(body: &str) -> Vec<String> {
     let Some((yaml_block, _)) = split_frontmatter(body) else {
         return vec![];
     };
-    let value: serde_yml::Value = match serde_yml::from_str(yaml_block) {
+    let value: serde_yaml_ng::Value = match serde_yaml_ng::from_str(yaml_block) {
         Ok(v) => v,
         Err(_) => return vec![],
     };
     let Some(map) = value.as_mapping() else {
         return vec![];
     };
-    let key = serde_yml::Value::String("tags_dismissed".into());
+    let key = serde_yaml_ng::Value::String("tags_dismissed".into());
     let entry = match map.get(&key) {
         Some(v) => v,
         None => return vec![],
     };
     match entry {
-        serde_yml::Value::Sequence(seq) => seq
+        serde_yaml_ng::Value::Sequence(seq) => seq
             .iter()
             .filter_map(|v| v.as_str().map(|s| s.to_string()))
             .collect(),
-        serde_yml::Value::String(s) => vec![s.clone()],
+        serde_yaml_ng::Value::String(s) => vec![s.clone()],
         _ => vec![],
     }
 }
@@ -180,31 +180,31 @@ pub fn add_dismissed_tag_to_body(body: &str, tag: &str) -> Result<String> {
     let yaml_block = &after_open[..end_idx];
     let rest = &after_open[end_idx + end_len..];
 
-    let mut value: serde_yml::Value = if yaml_block.trim().is_empty() {
-        serde_yml::Value::Mapping(serde_yml::Mapping::new())
+    let mut value: serde_yaml_ng::Value = if yaml_block.trim().is_empty() {
+        serde_yaml_ng::Value::Mapping(serde_yaml_ng::Mapping::new())
     } else {
-        serde_yml::from_str(yaml_block)
+        serde_yaml_ng::from_str(yaml_block)
             .with_context(|| format!("parsing frontmatter: {}", yaml_block))?
     };
     let map = value
         .as_mapping_mut()
         .ok_or_else(|| anyhow!("frontmatter is not a YAML mapping"))?;
 
-    let key = serde_yml::Value::String("tags_dismissed".into());
+    let key = serde_yaml_ng::Value::String("tags_dismissed".into());
     let entry = map
         .entry(key)
-        .or_insert(serde_yml::Value::Sequence(Vec::new()));
+        .or_insert(serde_yaml_ng::Value::Sequence(Vec::new()));
     match entry {
-        serde_yml::Value::Sequence(seq) => {
+        serde_yaml_ng::Value::Sequence(seq) => {
             if !seq.iter().any(|v| v.as_str() == Some(tag.as_str())) {
-                seq.push(serde_yml::Value::String(tag));
+                seq.push(serde_yaml_ng::Value::String(tag));
             }
         }
         _ => {
-            *entry = serde_yml::Value::Sequence(vec![serde_yml::Value::String(tag)]);
+            *entry = serde_yaml_ng::Value::Sequence(vec![serde_yaml_ng::Value::String(tag)]);
         }
     }
-    let serialized = serde_yml::to_string(&value)?;
+    let serialized = serde_yaml_ng::to_string(&value)?;
     Ok(format!("---\n{serialized}---\n{rest}"))
 }
 
@@ -245,10 +245,10 @@ pub fn add_tag_to_body(body: &str, tag: &str) -> Result<String> {
     let yaml_block = &after_open[..end_rel.0];
     let rest = &after_open[end_rel.0 + end_rel.1..];
 
-    let mut value: serde_yml::Value = if yaml_block.trim().is_empty() {
-        serde_yml::Value::Mapping(serde_yml::Mapping::new())
+    let mut value: serde_yaml_ng::Value = if yaml_block.trim().is_empty() {
+        serde_yaml_ng::Value::Mapping(serde_yaml_ng::Mapping::new())
     } else {
-        serde_yml::from_str(yaml_block)
+        serde_yaml_ng::from_str(yaml_block)
             .with_context(|| format!("parsing frontmatter: {}", yaml_block))?
     };
 
@@ -256,36 +256,36 @@ pub fn add_tag_to_body(body: &str, tag: &str) -> Result<String> {
         .as_mapping_mut()
         .ok_or_else(|| anyhow!("frontmatter is not a YAML mapping"))?;
 
-    let tags_key = serde_yml::Value::String("tags".into());
+    let tags_key = serde_yaml_ng::Value::String("tags".into());
     let entry = map
         .entry(tags_key)
-        .or_insert(serde_yml::Value::Sequence(Vec::new()));
+        .or_insert(serde_yaml_ng::Value::Sequence(Vec::new()));
     match entry {
-        serde_yml::Value::Sequence(seq) => {
+        serde_yaml_ng::Value::Sequence(seq) => {
             let already = seq.iter().any(|v| v.as_str() == Some(tag.as_str()));
             if !already {
-                seq.push(serde_yml::Value::String(tag.clone()));
+                seq.push(serde_yaml_ng::Value::String(tag.clone()));
             }
         }
         // If tags was a single string, promote it to a sequence with both
         // values.
-        serde_yml::Value::String(existing) => {
+        serde_yaml_ng::Value::String(existing) => {
             let prev = existing.clone();
-            *entry = serde_yml::Value::Sequence(if prev == tag {
-                vec![serde_yml::Value::String(prev)]
+            *entry = serde_yaml_ng::Value::Sequence(if prev == tag {
+                vec![serde_yaml_ng::Value::String(prev)]
             } else {
                 vec![
-                    serde_yml::Value::String(prev),
-                    serde_yml::Value::String(tag.clone()),
+                    serde_yaml_ng::Value::String(prev),
+                    serde_yaml_ng::Value::String(tag.clone()),
                 ]
             });
         }
         _ => {
-            *entry = serde_yml::Value::Sequence(vec![serde_yml::Value::String(tag.clone())]);
+            *entry = serde_yaml_ng::Value::Sequence(vec![serde_yaml_ng::Value::String(tag.clone())]);
         }
     }
 
-    let serialized = serde_yml::to_string(&value)?;
+    let serialized = serde_yaml_ng::to_string(&value)?;
     Ok(format!("---\n{serialized}---\n{rest}"))
 }
 
