@@ -1,3 +1,4 @@
+mod archive;
 mod attachments;
 mod autotag;
 mod chat;
@@ -61,6 +62,8 @@ pub fn run() {
             commands::open_today_daily,
             commands::save_attachment,
             commands::save_attachment_from_path,
+            commands::export_vault,
+            commands::open_vault_from_archive,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

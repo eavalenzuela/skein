@@ -81,6 +81,13 @@ CREATE TABLE IF NOT EXISTS embeddings (
   FOREIGN KEY (rel_path) REFERENCES pages(rel_path) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_embeddings_level ON embeddings(level, model);
+
+CREATE TABLE IF NOT EXISTS vector_cache (
+  hash   BLOB NOT NULL,
+  model  TEXT NOT NULL,
+  vector BLOB NOT NULL,
+  PRIMARY KEY (hash, model)
+);
 "#;
 
 pub fn db_path(app_data_dir: &Path) -> PathBuf {
@@ -370,12 +377,33 @@ impl Index {
                 "INSERT INTO embeddings (rel_path, level, chunk_idx, heading, text, hash, model, vector)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             )?;
+            let mut cache_get = tx.prepare(
+                "SELECT vector FROM vector_cache WHERE hash = ?1 AND model = ?2",
+            )?;
+            let mut cache_put = tx.prepare(
+                "INSERT OR REPLACE INTO vector_cache (hash, model, vector) VALUES (?1, ?2, ?3)",
+            )?;
 
             for chunk in &chunks {
-                let v = self.embedder.embed(&chunk.text);
                 let mut hasher = Sha256::new();
                 hasher.update(chunk.text.as_bytes());
                 let hash: Vec<u8> = hasher.finalize().to_vec();
+
+                // Skip the embedder if a vector for this exact chunk text +
+                // model is already cached (round-trip restore, or another
+                // page sharing identical content).
+                let cached: Option<Vec<u8>> = cache_get
+                    .query_row(params![hash, model_name], |r| r.get::<_, Vec<u8>>(0))
+                    .ok();
+                let v = match cached {
+                    Some(bytes) => bytes_to_vec(&bytes),
+                    None => {
+                        let computed = self.embedder.embed(&chunk.text);
+                        cache_put.execute(params![hash, model_name, vec_to_bytes(&computed)])?;
+                        computed
+                    }
+                };
+
                 stmt.execute(params![
                     rel_path,
                     "chunk",
@@ -390,9 +418,28 @@ impl Index {
             }
 
             // Page-level vector: mean of chunk vectors (renormalized) or, for
-            // empty bodies, the embedder's zero-output.
+            // empty bodies, the embedder's zero-output. Page-level vectors
+            // are also content-hashed for cache reuse.
+            let mut page_hasher = Sha256::new();
+            page_hasher.update(body.as_bytes());
+            let page_hash: Vec<u8> = page_hasher.finalize().to_vec();
+
             let page_vec = if chunk_vectors.is_empty() {
-                self.embedder.embed(body)
+                let cached: Option<Vec<u8>> = cache_get
+                    .query_row(params![page_hash, model_name], |r| r.get::<_, Vec<u8>>(0))
+                    .ok();
+                match cached {
+                    Some(bytes) => bytes_to_vec(&bytes),
+                    None => {
+                        let computed = self.embedder.embed(body);
+                        cache_put.execute(params![
+                            page_hash,
+                            model_name,
+                            vec_to_bytes(&computed)
+                        ])?;
+                        computed
+                    }
+                }
             } else {
                 let dim = chunk_vectors[0].len();
                 let mut acc = vec![0f32; dim];
@@ -409,22 +456,41 @@ impl Index {
                 acc
             };
 
-            let mut hasher = Sha256::new();
-            hasher.update(body.as_bytes());
-            let hash: Vec<u8> = hasher.finalize().to_vec();
             stmt.execute(params![
                 rel_path,
                 "page",
                 -1_i64,
                 "",
                 body,
-                hash,
+                page_hash,
                 model_name,
                 vec_to_bytes(&page_vec),
             ])?;
         }
         tx.commit()?;
         Ok(())
+    }
+
+    /// Pre-populate the vector cache from a sidecar SQLite produced by
+    /// `archive::export_vault`. Returns the number of rows imported.
+    pub fn import_vector_cache(&mut self, sidecar_db: &std::path::Path) -> Result<usize> {
+        if !sidecar_db.exists() {
+            return Ok(0);
+        }
+        let attach = sidecar_db
+            .to_str()
+            .ok_or_else(|| anyhow::anyhow!("non-utf8 sidecar path"))?
+            .replace('\'', "''");
+        self.conn.execute_batch(&format!(
+            "ATTACH DATABASE '{attach}' AS sc;
+             INSERT OR REPLACE INTO vector_cache (hash, model, vector)
+             SELECT hash, model, vector FROM sc.vectors;
+             DETACH DATABASE sc;"
+        ))?;
+        let n: usize =
+            self.conn
+                .query_row("SELECT COUNT(*) FROM vector_cache", [], |r| r.get(0))?;
+        Ok(n)
     }
 
     /// Cosine over the chunk-level vectors, optionally excluding chunks

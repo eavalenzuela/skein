@@ -100,3 +100,9 @@ export const saveAttachment = (pageRelPath: string, ext: string, bytes: Uint8Arr
 
 export const saveAttachmentFromPath = (pageRelPath: string, srcPath: string) =>
   invoke<string>("save_attachment_from_path", { pageRelPath, srcPath });
+
+export const exportVault = (destPath: string) =>
+  invoke<void>("export_vault", { destPath });
+
+export const openVaultFromArchive = (archivePath: string, destDir: string) =>
+  invoke<Vault>("open_vault_from_archive", { archivePath, destDir });

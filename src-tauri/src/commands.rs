@@ -4,6 +4,7 @@ use std::sync::Arc;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 
+use crate::archive;
 use crate::attachments;
 use crate::autotag;
 use crate::chat::{self, ChatMessageIn};
@@ -42,7 +43,9 @@ fn install_vault<R: Runtime>(
     state: &State<'_, AppState>,
     vault: Vault,
 ) -> Result<Vault, String> {
-    // Make sure the index DB is open.
+    // Make sure the index DB is open. Pull in any embeddings sidecar that
+    // landed in the vault during a restore-from-archive so that the rebuild
+    // below can reuse those vectors instead of re-running the embedder.
     {
         let mut idx_slot = state.index.lock();
         if idx_slot.is_none() {
@@ -51,6 +54,10 @@ fn install_vault<R: Runtime>(
         let idx = idx_slot
             .as_mut()
             .ok_or_else(|| "index not initialized".to_string())?;
+        let sidecar = vault.root.join(archive::SIDECAR_RELATIVE_PATH);
+        if sidecar.exists() {
+            let _ = idx.import_vector_cache(&sidecar);
+        }
         rebuild_index_for(idx, &vault)?;
     }
 
@@ -331,6 +338,33 @@ pub fn save_attachment_from_path(
 ) -> Result<String, String> {
     let vault = state.vault().ok_or("no vault open")?;
     attachments::save_attachment_from_path(&vault, &page_rel_path, &src_path).map_err(err)
+}
+
+#[tauri::command]
+pub fn export_vault<R: Runtime>(
+    app: AppHandle<R>,
+    dest_path: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let vault = state.vault().ok_or("no vault open")?;
+    let app_data_dir = app.path().app_data_dir().map_err(err)?;
+    let index_db = index::db_path(&app_data_dir);
+    let dest = PathBuf::from(&dest_path);
+    archive::export_vault(&vault.root, &index_db, &dest).map_err(err)
+}
+
+#[tauri::command]
+pub fn open_vault_from_archive<R: Runtime>(
+    archive_path: String,
+    dest_dir: String,
+    app: AppHandle<R>,
+    state: State<'_, AppState>,
+) -> Result<Vault, String> {
+    let archive_path = PathBuf::from(&archive_path);
+    let dest_dir = PathBuf::from(&dest_dir);
+    archive::extract_archive(&archive_path, &dest_dir).map_err(err)?;
+    let vault = Vault::from_path(dest_dir).map_err(err)?;
+    install_vault(&app, &state, vault)
 }
 
 #[tauri::command]

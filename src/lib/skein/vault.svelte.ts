@@ -5,6 +5,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import {
   currentVault,
   openVault,
+  openVaultFromArchive,
   closeVault,
   listBooks,
   listLoosePages,
@@ -85,6 +86,24 @@ export async function open(path: string) {
     await attachWatcher();
   } catch (e) {
     vaultState.error = String(e);
+  } finally {
+    vaultState.loading = false;
+  }
+}
+
+export async function openFromArchive(archivePath: string, destDir: string) {
+  vaultState.loading = true;
+  vaultState.error = null;
+  try {
+    const v = await openVaultFromArchive(archivePath, destDir);
+    vaultState.vault = v;
+    vaultState.activeBook = null;
+    vaultState.pagesInActiveBook = [];
+    await refreshVaultLists();
+    await attachWatcher();
+  } catch (e) {
+    vaultState.error = String(e);
+    throw e;
   } finally {
     vaultState.loading = false;
   }

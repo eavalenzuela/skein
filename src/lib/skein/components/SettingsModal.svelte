@@ -9,7 +9,13 @@
     type PageFont,
   } from "../tweaks.svelte.js";
   import { embedderState, downloadModel } from "../embedder.svelte.js";
-  import { vaultState, open as openVaultPath, close as closeVault } from "../vault.svelte.js";
+  import {
+    vaultState,
+    open as openVaultPath,
+    openFromArchive,
+    close as closeVault,
+  } from "../vault.svelte.js";
+  import { exportVault } from "../vault.js";
   import {
     hasSecret,
     setSecret,
@@ -18,7 +24,7 @@
     setSettings,
     type SecretName,
   } from "../settings.js";
-  import { open as openDialog } from "@tauri-apps/plugin-dialog";
+  import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
   import { isPermissionGranted, requestPermission } from "@tauri-apps/plugin-notification";
 
   interface Props {
@@ -139,6 +145,52 @@
       await openVaultPath(selected);
     }
   }
+
+  let restoring = $state(false);
+  let restoreError = $state<string | null>(null);
+  async function restoreFromArchive() {
+    restoreError = null;
+    const archive = await openDialog({
+      multiple: false,
+      filters: [{ name: "Zip archive", extensions: ["zip"] }],
+    });
+    if (typeof archive !== "string") return;
+    const dest = await openDialog({ directory: true, multiple: false });
+    if (typeof dest !== "string") return;
+    restoring = true;
+    try {
+      await openFromArchive(archive, dest);
+      onClose();
+    } catch (e) {
+      restoreError = String(e);
+    } finally {
+      restoring = false;
+    }
+  }
+
+  let exporting = $state(false);
+  let exportError = $state<string | null>(null);
+  let exportedTo = $state<string | null>(null);
+  async function exportCurrentVault() {
+    if (!vaultState.vault) return;
+    exportError = null;
+    exportedTo = null;
+    const defaultName = `${vaultState.vault.name}.zip`;
+    const dest = await saveDialog({
+      defaultPath: defaultName,
+      filters: [{ name: "Zip archive", extensions: ["zip"] }],
+    });
+    if (typeof dest !== "string") return;
+    exporting = true;
+    try {
+      await exportVault(dest);
+      exportedTo = dest;
+    } catch (e) {
+      exportError = String(e);
+    } finally {
+      exporting = false;
+    }
+  }
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -170,11 +222,44 @@
               <button class="danger" onclick={closeVault}>close</button>
             </div>
           </div>
+          <div class="row">
+            <div class="kv">
+              <div class="k">Export</div>
+              <div class="v muted">
+                Bundles vault contents + embeddings sidecar into a zip.
+              </div>
+            </div>
+            <div class="actions">
+              <button onclick={exportCurrentVault} disabled={exporting}>
+                {exporting ? "exporting…" : "export vault…"}
+              </button>
+            </div>
+          </div>
+          {#if exportedTo}
+            <p class="muted mono">Wrote {exportedTo}</p>
+          {/if}
+          {#if exportError}
+            <p class="danger">{exportError}</p>
+          {/if}
         {:else}
           <div class="row">
             <p class="muted">No vault open.</p>
-            <button class="primary" onclick={pickNewVault}>pick a folder</button>
+            <div class="actions">
+              <button class="primary" onclick={pickNewVault}>pick a folder</button>
+              <button onclick={restoreFromArchive} disabled={restoring}>
+                {restoring ? "restoring…" : "open from archive…"}
+              </button>
+            </div>
           </div>
+          <p class="muted">
+            To import an Obsidian vault or a plain folder of markdown, just
+            pick the folder — the existing structure (subdirs as books,
+            top-level <code>.md</code> as loose pages) carries over with no
+            transformation.
+          </p>
+          {#if restoreError}
+            <p class="danger">{restoreError}</p>
+          {/if}
         {/if}
       </section>
 
