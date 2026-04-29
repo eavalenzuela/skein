@@ -159,6 +159,9 @@
 
 <svelte:window onkeydown={onKeydown} />
 
+<!-- Modals must render inside .skein so the theme CSS variables are
+     in scope; otherwise they resolve to nothing and text comes out
+     black on the dark backdrop. -->
 <div class="skein theme-{theme}" style:--page-font={pageFont}>
   <div class="win">
     <Titlebar vault={vaultState.vault?.name ?? "Skein"} />
@@ -255,15 +258,15 @@
       </div>
     </div>
   </div>
+
+  {#if searchUi.open}
+    <CommandPalette />
+  {/if}
+
+  {#if settingsUi.open}
+    <SettingsModal onClose={closeSettings} />
+  {/if}
 </div>
-
-{#if searchUi.open}
-  <CommandPalette />
-{/if}
-
-{#if settingsUi.open}
-  <SettingsModal onClose={closeSettings} />
-{/if}
 
 <style>
   .skein {

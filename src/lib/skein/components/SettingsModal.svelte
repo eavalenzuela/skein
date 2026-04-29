@@ -654,13 +654,13 @@
   .overlay {
     position: fixed;
     inset: 0;
-    background: oklch(0 0 0 / 0.5);
+    background: oklch(0 0 0 / 0.72);
     z-index: 800;
     display: flex;
     justify-content: center;
     align-items: flex-start;
     padding-top: 6vh;
-    backdrop-filter: blur(2px);
+    backdrop-filter: blur(3px);
   }
   .modal {
     width: 720px;

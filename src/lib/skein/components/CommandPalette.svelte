@@ -122,13 +122,13 @@
   .palette-overlay {
     position: fixed;
     inset: 0;
-    background: oklch(0 0 0 / 0.45);
+    background: oklch(0 0 0 / 0.65);
     z-index: 800;
     display: flex;
     justify-content: center;
     align-items: flex-start;
     padding-top: 12vh;
-    backdrop-filter: blur(2px);
+    backdrop-filter: blur(3px);
   }
   .palette {
     width: 640px;

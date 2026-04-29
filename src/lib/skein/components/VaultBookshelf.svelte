@@ -1,7 +1,14 @@
 <script lang="ts">
   import type { Book } from "../vault.js";
-  import { createBook, deleteBook, renameBook, setBookOrder, createPage } from "../vault.js";
-  import { openTab } from "../tabs.svelte.js";
+  import {
+    createBook,
+    deleteBook,
+    renameBook,
+    setBookOrder,
+    createPage,
+    listPagesInBook,
+  } from "../vault.js";
+  import { openTab, tabsState } from "../tabs.svelte.js";
   import type { ShelfStyle, Theme } from "../tweaks.svelte.js";
   import { spineHeight, spineHue, spineShade, spineWidth } from "../spineHash.js";
   import { vaultState, selectBook } from "../vault.svelte.js";
@@ -90,7 +97,7 @@
       x: ev.clientX,
       y: ev.clientY,
       items: [
-        { label: "Open", action: () => selectBook(b.name) },
+        { label: "Open", action: () => void openBook(b.name) },
         {
           label: `New page in ${b.name}…`,
           action: () => {
@@ -115,6 +122,30 @@
         },
       ],
     };
+  }
+
+  async function openBook(book: string) {
+    // When the desk has tabs open the PageList isn't visible, so just
+    // setting selectBook does nothing the user can see. Open the book's
+    // first page so the existing pane-routing rules take over (lands in
+    // unpinned side, replaces active, etc). When there are no tabs, fall
+    // back to the original "show this book's PageList" behavior.
+    if (tabsState.tabs.length === 0) {
+      await selectBook(book);
+      return;
+    }
+    try {
+      const pages = await listPagesInBook(book);
+      const first = pages[0];
+      if (first) {
+        await openTab({ rel_path: first.rel_path, title: first.title });
+      } else {
+        // Empty book — fall back to showing it.
+        await selectBook(book);
+      }
+    } catch {
+      await selectBook(book);
+    }
   }
 
   async function newPageIn(book: string) {
@@ -373,7 +404,8 @@
     cursor: pointer;
     font: inherit;
     color: inherit;
-    display: contents;
+    display: inline-flex;
+    align-items: flex-end;
   }
   .bare.drag-over :global(.sk-spine) {
     transform: translateY(-4px);
