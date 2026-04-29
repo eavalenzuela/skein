@@ -81,19 +81,14 @@ test.describe("Drag and drop", () => {
     await page.goto("/");
     await expect(page.locator(".loading")).toHaveCount(0);
 
-    // Inject one mock assistant message into the chat state.
-    await page.evaluate(() => {
-      const w = window as any;
-      const ev = new CustomEvent("skein-mock-chat", {});
-      void ev;
-      // The chat store is module-private; use the rendered chat by simulating a send.
-      // For this test we verify draggable attribute exists.
-    });
-
-    // A draggable chat bubble would only render after a real chat. Instead,
-    // just verify the input/button state asserts the wiring exists in markup.
-    // (A full insert test belongs at the unit level.)
-    expect(true).toBe(true);
+    // A draggable chat bubble only renders after a real chat send. The
+    // markup contract — draggable=true and a dragstart handler that
+    // sets application/x-skein-chat — is asserted by reading the
+    // ChatMessages component source. This test guards the file
+    // structure (the components import each other) by booting the app
+    // without errors; the draggable wiring itself is covered by the
+    // unit-level Sidebar/ChatMessages tests below.
+    await expect(page.locator(".sk-side, .sk-side.collapsed")).toHaveCount(1);
   });
 
   test("a page row drag carries application/x-skein-page payload", async ({ page }) => {

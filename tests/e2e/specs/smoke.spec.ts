@@ -19,12 +19,16 @@ test("app boots and renders the bookshelf with mock vault", async ({ page }) => 
 test("vault picker shows when no vault is open", async ({ page }) => {
   await page.addInitScript(() => {
     // override: drop the pre-set vault so VaultPicker shows
-    const w = window as any;
+    interface TauriInternals {
+      invoke: (cmd: string, args?: unknown) => Promise<unknown>;
+      [k: string]: unknown;
+    }
+    const w = window as unknown as { __TAURI_INTERNALS__?: TauriInternals };
     const orig = w.__TAURI_INTERNALS__;
     if (orig) {
-      const wrapped = { ...orig };
-      const origInvoke = orig.invoke;
-      wrapped.invoke = (cmd: string, args: any) => {
+      const wrapped: TauriInternals = { ...orig };
+      const origInvoke = orig.invoke.bind(orig);
+      wrapped.invoke = (cmd: string, args?: unknown) => {
         if (cmd === "current_vault") return Promise.resolve(null);
         return origInvoke(cmd, args);
       };

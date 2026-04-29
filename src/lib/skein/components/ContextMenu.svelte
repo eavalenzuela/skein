@@ -19,6 +19,9 @@
   let { x, y, items, onclose }: Props = $props();
 
   let menuEl: HTMLDivElement;
+  // Snapshot props at mount — the menu's items / position don't change
+  // during its short lifetime, so capturing the initial value is correct.
+  // svelte-ignore state_referenced_locally
   let active = $state(firstSelectable(items));
 
   function firstSelectable(list: MenuItem[]): number {
@@ -37,6 +40,7 @@
 
   // Clamp the menu inside the viewport so it doesn't render off-edge when
   // the user right-clicks near the bottom or right of the window.
+  // svelte-ignore state_referenced_locally
   let clamped = $state({ x, y });
   onMount(() => {
     const rect = menuEl.getBoundingClientRect();

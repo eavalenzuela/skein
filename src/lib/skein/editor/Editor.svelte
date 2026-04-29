@@ -26,6 +26,7 @@
   let lastDoc = "";
   // Snapshot of relPath kept in sync via $effect, so paste/drop handlers
   // (which run outside the reactive scope) see the current page.
+  // svelte-ignore state_referenced_locally
   let currentRelPath = $state(relPath);
   const pageCtxCompartment = new Compartment();
 
