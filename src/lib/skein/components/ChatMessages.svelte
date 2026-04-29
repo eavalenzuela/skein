@@ -13,9 +13,23 @@
 <div class="sk-chat" role="log" aria-live="polite">
   {#each chatState.messages as m (m.id)}
     {#if m.role === "user"}
-      <div class="sk-msg user" role="article" ondragstart={onDragStart}>{m.content}</div>
+      <div
+        class="sk-msg user"
+        role="article"
+        draggable="true"
+        ondragstart={onDragStart}
+        title="Drag a selection into the editor to insert"
+      >
+        {m.content}
+      </div>
     {:else}
-      <div class="sk-msg asst" role="article" ondragstart={onDragStart}>
+      <div
+        class="sk-msg asst"
+        role="article"
+        draggable="true"
+        ondragstart={onDragStart}
+        title="Drag a selection into the editor to insert"
+      >
         <div class="who">
           <span class="ico">A</span>
           {chatState.model.replace("claude-", "")} · {m.contextMode ?? chatState.contextMode}
@@ -47,6 +61,12 @@
      Local styles cover the additions Phase 7 introduces. */
   .sk-msg.asst .body {
     white-space: pre-wrap;
+  }
+  .sk-msg[draggable="true"] {
+    cursor: grab;
+  }
+  .sk-msg[draggable="true"]:active {
+    cursor: grabbing;
   }
   .ctx {
     margin-top: 6px;

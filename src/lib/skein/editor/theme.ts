@@ -19,6 +19,10 @@ export const skeinEditorTheme = EditorView.theme(
       fontFamily: 'var(--page-font, "Source Serif 4"), Georgia, serif',
       lineHeight: "1.65",
       overflow: "auto",
+      // Reserve track space for the horizontal scrollbar so it doesn't paint
+      // over content that sits directly beneath the editor (e.g. the
+      // RelatedStrip rendered as a sibling of .sk-page).
+      scrollbarGutter: "stable",
     },
     ".cm-content": {
       padding: "38px 56px 42px",

@@ -3,6 +3,7 @@
   import { openSettings } from "../settingsUi.svelte.js";
   import { openTodayDaily } from "../vault.js";
   import { openTab } from "../tabs.svelte.js";
+  import { close as closeVault } from "../vault.svelte.js";
   import { getCurrentWindow } from "@tauri-apps/api/window";
 
   interface Props {
@@ -70,7 +71,12 @@
         <path d="M10 10l3 3" />
       </svg>
     </button>
-    <div class="sk-tb-btn" title="Vaults">
+    <button
+      class="sk-tb-btn bare"
+      title="Switch vault — close this one and return to the picker"
+      onclick={() => void closeVault()}
+      aria-label="Switch vault"
+    >
       <svg
         width="14"
         height="14"
@@ -81,7 +87,7 @@
       >
         <path d="M3 2.5h10M3 5.5h10M3 8.5h7M3 11.5h5" />
       </svg>
-    </div>
+    </button>
     <button
       class="sk-tb-btn bare"
       title="Settings (Ctrl+,)"

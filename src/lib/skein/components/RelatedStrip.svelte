@@ -73,15 +73,17 @@
 
 <style>
   .related-strip {
+    position: relative;
+    z-index: 2;
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 8px 18px;
+    padding: 10px 18px;
     background: var(--paper-2);
     border-top: 1px solid var(--chrome-edge);
     font-family: "Inter", system-ui, sans-serif;
     flex-shrink: 0;
-    min-height: 36px;
+    min-height: 44px;
   }
   .label {
     font-size: 10.5px;

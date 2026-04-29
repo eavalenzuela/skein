@@ -184,7 +184,9 @@
       ></textarea>
       <div class="sk-input-btns">
         <div class="left">
-          <button disabled>@ Mention</button>
+          <button disabled title="Coming soon: type @ in the message to mention a page"
+            >@ Mention</button
+          >
         </div>
         <button class="send" onclick={onSubmit} disabled={chatState.busy || !input.trim()}>
           <svg width="11" height="11" viewBox="0 0 14 14" fill="currentColor">
