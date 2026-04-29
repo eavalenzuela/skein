@@ -1,6 +1,7 @@
 mod archive;
 mod attachments;
 mod autotag;
+mod books;
 mod chat;
 mod chunker;
 mod commands;
@@ -66,6 +67,10 @@ pub fn run() {
             commands::open_vault,
             commands::close_vault,
             commands::list_books,
+            commands::create_book,
+            commands::rename_book,
+            commands::delete_book,
+            commands::set_book_order,
             commands::list_loose_pages,
             commands::list_pages_in_book,
             commands::read_page,

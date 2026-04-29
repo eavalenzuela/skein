@@ -25,6 +25,19 @@ export const currentVault = () => invoke<Vault | null>("current_vault");
 export const openVault = (path: string) => invoke<Vault>("open_vault", { path });
 export const closeVault = () => invoke<void>("close_vault");
 export const listBooks = () => invoke<Book[]>("list_books");
+export const createBook = (name: string) => invoke<void>("create_book", { name });
+export const renameBook = (oldName: string, newName: string) =>
+  invoke<void>("rename_book", { oldName, newName });
+
+export interface DeleteBookResult {
+  deleted_rel_paths: string[];
+  moved: [string, string][];
+}
+export const deleteBook = (name: string, alsoDeletePages: boolean) =>
+  invoke<DeleteBookResult>("delete_book", { name, alsoDeletePages });
+
+export const setBookOrder = (names: string[]) =>
+  invoke<void>("set_book_order", { names });
 export const listLoosePages = () => invoke<Page[]>("list_loose_pages");
 export const listPagesInBook = (book: string) => invoke<Page[]>("list_pages_in_book", { book });
 export const readPage = (relPath: string) => invoke<string>("read_page", { relPath });

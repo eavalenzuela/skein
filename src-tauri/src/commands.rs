@@ -7,6 +7,7 @@ use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 use crate::archive;
 use crate::attachments;
 use crate::autotag;
+use crate::books::{self, DeleteResult};
 use crate::git_sync::{self, AuthKind, GitStatus, PullResult};
 use crate::chat::{self, ChatMessageIn};
 use crate::daily::{self, DailyResult};
@@ -108,7 +109,88 @@ pub fn close_vault<R: Runtime>(
 #[tauri::command]
 pub fn list_books(state: State<'_, AppState>) -> Result<Vec<Book>, String> {
     let vault = state.vault().ok_or("no vault open")?;
-    vault::list_books(&vault).map_err(err)
+    let raw = vault::list_books(&vault).map_err(err)?;
+    let meta = books::read_meta(&vault);
+    Ok(books::apply_order(raw, &meta))
+}
+
+#[tauri::command]
+pub fn create_book<R: Runtime>(
+    app: AppHandle<R>,
+    name: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let vault = state.vault().ok_or("no vault open")?;
+    books::create_book(&vault, &name).map_err(err)?;
+    let _ = app.emit("vault-changed", ());
+    Ok(())
+}
+
+#[tauri::command]
+pub fn rename_book<R: Runtime>(
+    app: AppHandle<R>,
+    old_name: String,
+    new_name: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let vault = state.vault().ok_or("no vault open")?;
+    books::rename_book(&vault, &old_name, &new_name).map_err(err)?;
+    // Folder rename moves every page beneath it to a new rel_path. Easiest
+    // correct thing is to drop the index for those rows and let the watcher
+    // (or the next list-load) re-ingest them.
+    if let Some(idx) = state.index.lock().as_mut() {
+        let prefix_old = format!("{}/", old_name);
+        let _ = idx.delete_pages_with_prefix(&prefix_old);
+    }
+    rebuild_index_and_emit(&app, &state)?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn delete_book<R: Runtime>(
+    app: AppHandle<R>,
+    name: String,
+    also_delete_pages: bool,
+    state: State<'_, AppState>,
+) -> Result<DeleteResult, String> {
+    let vault = state.vault().ok_or("no vault open")?;
+    let result = books::delete_book(&vault, &name, also_delete_pages).map_err(err)?;
+    if let Some(idx) = state.index.lock().as_mut() {
+        for rel in &result.deleted_rel_paths {
+            let _ = idx.delete_page(rel);
+        }
+        for (old, _new) in &result.moved {
+            let _ = idx.delete_page(old);
+        }
+    }
+    rebuild_index_and_emit(&app, &state)?;
+    Ok(result)
+}
+
+#[tauri::command]
+pub fn set_book_order<R: Runtime>(
+    app: AppHandle<R>,
+    names: Vec<String>,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let vault = state.vault().ok_or("no vault open")?;
+    books::set_order(&vault, names).map_err(err)?;
+    let _ = app.emit("vault-changed", ());
+    Ok(())
+}
+
+fn rebuild_index_and_emit<R: Runtime>(
+    app: &AppHandle<R>,
+    state: &State<'_, AppState>,
+) -> Result<(), String> {
+    let vault = state.vault().ok_or("no vault open")?;
+    if let Some(idx) = state.index.lock().as_mut() {
+        for page in vault::walk_pages(&vault) {
+            let _ = idx.upsert_page(&page);
+        }
+    }
+    let _ = app.emit("vault-changed", ());
+    Ok(())
 }
 
 #[tauri::command]

@@ -312,6 +312,17 @@ impl Index {
         Ok(())
     }
 
+    /// Drop every indexed page whose rel_path starts with `prefix` — used
+    /// when a book folder is renamed or removed wholesale.
+    pub fn delete_pages_with_prefix(&mut self, prefix: &str) -> Result<()> {
+        let pattern = format!("{}%", prefix);
+        self.conn.execute(
+            "DELETE FROM pages WHERE rel_path LIKE ?1",
+            params![pattern],
+        )?;
+        Ok(())
+    }
+
     pub fn all_tags(&self) -> Result<Vec<String>> {
         let mut stmt = self
             .conn
