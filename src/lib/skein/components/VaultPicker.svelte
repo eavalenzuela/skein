@@ -1,6 +1,9 @@
 <script lang="ts">
   import { open as openDialog } from "@tauri-apps/plugin-dialog";
-  import { open as openVaultPath, vaultState } from "../vault.svelte.js";
+  import { open as openVaultPath, openFromArchive, vaultState } from "../vault.svelte.js";
+
+  let restoring = $state(false);
+  let restoreError = $state<string | null>(null);
 
   async function pick() {
     const selected = await openDialog({ directory: true, multiple: false });
@@ -8,20 +11,48 @@
       await openVaultPath(selected);
     }
   }
+
+  async function restoreFromArchive() {
+    restoreError = null;
+    const archive = await openDialog({
+      multiple: false,
+      filters: [{ name: "Zip archive", extensions: ["zip"] }],
+    });
+    if (typeof archive !== "string") return;
+    const dest = await openDialog({ directory: true, multiple: false });
+    if (typeof dest !== "string") return;
+    restoring = true;
+    try {
+      await openFromArchive(archive, dest);
+    } catch (e) {
+      restoreError = String(e);
+    } finally {
+      restoring = false;
+    }
+  }
 </script>
 
 <div class="vault-picker">
   <div class="card">
     <h1>Skein</h1>
-    <p>Pick a folder to use as your vault.</p>
+    <p>Pick a folder to use as your vault, or restore one from a backup.</p>
     <p class="hint">
       Books are subfolders, pages are <code>.md</code> files. Top-level pages live in the Folio.
+      Existing Obsidian vaults and plain markdown folders work as-is.
     </p>
-    <button onclick={pick} disabled={vaultState.loading}>
-      {vaultState.loading ? "Opening…" : "Choose vault folder"}
-    </button>
+    <div class="actions">
+      <button class="primary" onclick={pick} disabled={vaultState.loading || restoring}>
+        {vaultState.loading ? "Opening…" : "Choose vault folder"}
+      </button>
+      <button onclick={restoreFromArchive} disabled={vaultState.loading || restoring}>
+        {restoring ? "Restoring…" : "Open from archive…"}
+      </button>
+    </div>
     {#if vaultState.error}
       <p class="error">{vaultState.error}</p>
+    {/if}
+    {#if restoreError}
+      <p class="error">{restoreError}</p>
     {/if}
   </div>
 </div>
@@ -71,16 +102,27 @@
     padding: 1px 5px;
     border-radius: 3px;
   }
+  .actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
   button {
-    background: oklch(0.78 0.13 75);
-    color: oklch(0.2 0.02 60);
-    border: 0;
+    background: oklch(0.27 0.012 70);
+    color: oklch(0.92 0.012 80);
+    border: 1px solid oklch(0.36 0.014 70);
     border-radius: 6px;
     padding: 9px 18px;
     font: inherit;
     font-weight: 600;
     font-size: 13px;
     cursor: pointer;
+  }
+  button.primary {
+    background: oklch(0.78 0.13 75);
+    color: oklch(0.2 0.02 60);
+    border-color: transparent;
   }
   button:hover {
     filter: brightness(1.05);

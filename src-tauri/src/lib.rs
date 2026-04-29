@@ -14,11 +14,33 @@ mod state;
 mod vault;
 mod watcher;
 
+use std::io::Write;
 use std::sync::Arc;
 
 use parking_lot::Mutex;
+use tauri::Manager;
 
 use state::AppState;
+
+fn install_panic_logger(app_data_dir: std::path::PathBuf) {
+    // Append panics to a per-user log so a crashing build leaves a trail
+    // the user can attach to a bug report. Best-effort — if we can't write
+    // the file we fall back to the default panic behavior.
+    let _ = std::fs::create_dir_all(&app_data_dir);
+    let log_path = app_data_dir.join("skein.log");
+    let prev = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log_path)
+        {
+            let now = chrono::Local::now().format("%Y-%m-%dT%H:%M:%S%z");
+            let _ = writeln!(f, "[{}] PANIC {}", now, info);
+        }
+        prev(info);
+    }));
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -29,6 +51,9 @@ pub fn run() {
         .manage(AppState::default())
         .setup(|app| {
             let handle = app.handle().clone();
+            if let Ok(dir) = handle.path().app_data_dir() {
+                install_panic_logger(dir);
+            }
             commands::try_load_local_embedding_model(&handle);
             commands::restore_last_vault(&handle);
             // Daily-note reminder loop runs for the lifetime of the app.
