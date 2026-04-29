@@ -24,3 +24,15 @@ export function spineShade(name: string): number {
   // 0.28–0.34
   return 0.28 + (hash(name + "s") % 7) / 100;
 }
+
+/** Spine width grows with title length so long names stay legible.
+ * Vertical text in `writing-mode: vertical-rl` wraps into extra columns
+ * once we widen, which is the visual we want — comically wide is fine. */
+export function spineWidth(name: string): number {
+  const base = 28;
+  const len = name.length;
+  if (len <= 10) return base;
+  // ~10px per extra ~3 chars beyond the comfortable cap.
+  const extra = Math.ceil((len - 10) / 3) * 10;
+  return base + extra;
+}

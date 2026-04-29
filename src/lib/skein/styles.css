@@ -345,9 +345,9 @@
   letter-spacing: 0.05em;
   color: oklch(from var(--spine-bg) calc(l + 0.55) calc(c * 0.3) h);
   text-transform: uppercase;
-  padding: 18px 0 14px;
+  padding: 18px 4px 14px;
   overflow: hidden;
-  white-space: nowrap;
+  white-space: normal;
   text-shadow: 0 1px 0 oklch(0 0 0 / 0.4);
 }
 .sk-spine .title.below-band {
