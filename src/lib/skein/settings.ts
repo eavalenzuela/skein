@@ -14,6 +14,8 @@ export interface Settings {
   git_remote_url: string | null;
   git_branch: string | null;
   git_auth_kind: string | null;
+  chat_model: string | null;
+  chat_context_mode: string | null;
 }
 
 export interface SettingsPatch {
@@ -27,6 +29,8 @@ export interface SettingsPatch {
   git_remote_url?: string;
   git_branch?: string;
   git_auth_kind?: string;
+  chat_model?: string;
+  chat_context_mode?: string;
 }
 
 export const getSettings = () => invoke<Settings>("get_settings");

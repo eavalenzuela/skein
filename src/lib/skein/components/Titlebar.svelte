@@ -3,6 +3,7 @@
   import { openSettings } from "../settingsUi.svelte.js";
   import { openTodayDaily } from "../vault.js";
   import { openTab } from "../tabs.svelte.js";
+  import { getCurrentWindow } from "@tauri-apps/api/window";
 
   interface Props {
     vault: string;
@@ -21,15 +22,19 @@
       // Settings modal is the right place to surface daily-note errors.
     }
   }
+
+  async function winMinimize() {
+    await getCurrentWindow().minimize();
+  }
+  async function winToggleMaximize() {
+    await getCurrentWindow().toggleMaximize();
+  }
+  async function winClose() {
+    await getCurrentWindow().close();
+  }
 </script>
 
 <div class="sk-titlebar">
-  <div class="sk-tb-menus">
-    <div class="sk-tb-menu">File</div>
-    <div class="sk-tb-menu">Edit</div>
-    <div class="sk-tb-menu">View</div>
-    <div class="sk-tb-menu">Help</div>
-  </div>
   <div class="sk-tb-title">
     Skein <span class="vault">— {vault}</span>
   </div>
@@ -98,7 +103,7 @@
       </svg>
     </button>
     <div class="sk-tb-window">
-      <button title="Minimize" aria-label="Minimize">
+      <button title="Minimize" aria-label="Minimize" onclick={winMinimize}>
         <svg
           width="8"
           height="8"
@@ -110,7 +115,7 @@
           <path d="M1.5 4h5" />
         </svg>
       </button>
-      <button title="Maximize" aria-label="Maximize">
+      <button title="Maximize" aria-label="Maximize" onclick={winToggleMaximize}>
         <svg
           width="8"
           height="8"
@@ -122,7 +127,7 @@
           <rect x="1.5" y="1.5" width="5" height="5" />
         </svg>
       </button>
-      <button title="Close" class="close" aria-label="Close">
+      <button title="Close" class="close" aria-label="Close" onclick={winClose}>
         <svg
           width="8"
           height="8"

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
   import type { Tab } from "../tabs.svelte.js";
-  import { suggestTags, applyTag } from "../vault.js";
+  import { suggestTags, applyTag, dismissTag } from "../vault.js";
   import { hasSecret } from "../settings.js";
 
   interface Props {
@@ -106,8 +106,14 @@
     }
   }
 
-  function dismiss(tag: string) {
+  async function dismiss(tag: string) {
     suggestions = suggestions.filter((s) => s !== tag);
+    try {
+      await dismissTag(tab.rel_path, tag);
+    } catch (e) {
+      // Don't surface — the chip is already gone visually. Log only.
+      console.error("dismissTag", e);
+    }
   }
 </script>
 

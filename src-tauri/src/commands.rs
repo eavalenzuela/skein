@@ -383,9 +383,26 @@ pub async fn suggest_tags(
         Some(idx) => idx.all_tags().unwrap_or_default(),
         None => vec![],
     };
-    autotag::suggest_tags(&api_key, &title, &body, &existing)
+    let dismissed = autotag::parse_dismissed_tags(&body);
+    let mut raw = autotag::suggest_tags(&api_key, &title, &body, &existing)
         .await
-        .map_err(err)
+        .map_err(err)?;
+    raw.retain(|t| !dismissed.iter().any(|d| d == t));
+    Ok(raw)
+}
+
+#[tauri::command]
+pub fn dismiss_tag(rel_path: String, tag: String, state: State<'_, AppState>) -> Result<(), String> {
+    let vault = state.vault().ok_or("no vault open")?;
+    let body = vault::read_page_body(&vault, &rel_path).map_err(err)?;
+    let new_body = autotag::add_dismissed_tag_to_body(&body, &tag).map_err(err)?;
+    vault::write_page_body(&vault, &rel_path, &new_body).map_err(err)?;
+    if let Some(data) = vault::read_page_data(&vault, &vault.root.join(&rel_path)) {
+        if let Some(idx) = state.index.lock().as_mut() {
+            let _ = idx.upsert_page(&data);
+        }
+    }
+    Ok(())
 }
 
 #[tauri::command]

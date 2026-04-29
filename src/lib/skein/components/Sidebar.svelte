@@ -3,7 +3,7 @@
   import type { SidebarMode } from "../tweaks.svelte.js";
   import { chatState, send, attachChatBus, CHAT_MODELS, type ContextMode } from "../chat.svelte.js";
   import { activeTab } from "../tabs.svelte.js";
-  import { hasSecret } from "../settings.js";
+  import { hasSecret, getSettings, setSettings } from "../settings.js";
   import { openSettings } from "../settingsUi.svelte.js";
   import ChatMessages from "./ChatMessages.svelte";
 
@@ -18,7 +18,32 @@
   onMount(async () => {
     await attachChatBus();
     keyConfigured = await hasSecret("anthropic_api_key").catch(() => false);
+    // Restore last-used model + context mode so users don't have to re-pick
+    // every launch. Saved on each cycle below.
+    try {
+      const s = await getSettings();
+      if (s.chat_model && CHAT_MODELS.some((m) => m.id === s.chat_model)) {
+        chatState.model = s.chat_model;
+      }
+      if (
+        s.chat_context_mode &&
+        (["current", "current+related", "vault"] as const).includes(
+          s.chat_context_mode as ContextMode,
+        )
+      ) {
+        chatState.contextMode = s.chat_context_mode as ContextMode;
+      }
+    } catch {
+      // Settings load failed — fall back to defaults. Non-fatal.
+    }
   });
+
+  function persistChatPrefs() {
+    void setSettings({
+      chat_model: chatState.model,
+      chat_context_mode: chatState.contextMode,
+    });
+  }
 
   async function refreshKey() {
     keyConfigured = await hasSecret("anthropic_api_key").catch(() => false);
@@ -53,6 +78,7 @@
   function cycleModel() {
     const idx = CHAT_MODELS.findIndex((m) => m.id === chatState.model);
     chatState.model = CHAT_MODELS[(idx + 1) % CHAT_MODELS.length].id;
+    persistChatPrefs();
   }
 
   const CONTEXT_OPTIONS: { id: ContextMode; label: string }[] = [
@@ -64,6 +90,7 @@
   function cycleContext() {
     const idx = CONTEXT_OPTIONS.findIndex((c) => c.id === chatState.contextMode);
     chatState.contextMode = CONTEXT_OPTIONS[(idx + 1) % CONTEXT_OPTIONS.length].id;
+    persistChatPrefs();
   }
 
   function contextLabel(): string {

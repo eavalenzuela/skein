@@ -80,6 +80,8 @@ export const downloadEmbeddingModel = () =>
 export const suggestTags = (relPath: string) => invoke<string[]>("suggest_tags", { relPath });
 export const applyTag = (relPath: string, tag: string) =>
   invoke<void>("apply_tag", { relPath, tag });
+export const dismissTag = (relPath: string, tag: string) =>
+  invoke<void>("dismiss_tag", { relPath, tag });
 
 export interface PageTitle {
   rel_path: string;

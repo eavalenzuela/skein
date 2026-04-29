@@ -18,6 +18,8 @@ pub struct Settings {
     pub git_remote_url: Option<String>,
     pub git_branch: Option<String>,
     pub git_auth_kind: Option<String>,
+    pub chat_model: Option<String>,
+    pub chat_context_mode: Option<String>,
 }
 
 #[derive(Deserialize, Default, Clone, Debug)]
@@ -32,6 +34,8 @@ pub struct SettingsPatch {
     pub git_remote_url: Option<String>,
     pub git_branch: Option<String>,
     pub git_auth_kind: Option<String>,
+    pub chat_model: Option<String>,
+    pub chat_context_mode: Option<String>,
 }
 
 impl Settings {
@@ -66,6 +70,12 @@ impl Settings {
         }
         if let Some(v) = patch.git_auth_kind {
             self.git_auth_kind = if v.is_empty() { None } else { Some(v) };
+        }
+        if let Some(v) = patch.chat_model {
+            self.chat_model = if v.is_empty() { None } else { Some(v) };
+        }
+        if let Some(v) = patch.chat_context_mode {
+            self.chat_context_mode = if v.is_empty() { None } else { Some(v) };
         }
     }
 }

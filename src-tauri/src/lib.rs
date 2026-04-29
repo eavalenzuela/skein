@@ -90,6 +90,7 @@ pub fn run() {
             commands::chat_send,
             commands::suggest_tags,
             commands::apply_tag,
+            commands::dismiss_tag,
             commands::open_today_daily,
             commands::save_attachment,
             commands::save_attachment_from_path,

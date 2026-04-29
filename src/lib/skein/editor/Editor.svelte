@@ -218,6 +218,33 @@
               })();
               return true;
             },
+            dragover(event) {
+              const dt = event.dataTransfer;
+              if (!dt) return false;
+              if (Array.from(dt.types ?? []).includes("application/x-skein-chat")) {
+                event.preventDefault();
+                if (dt) dt.dropEffect = "copy";
+                return true;
+              }
+              return false;
+            },
+            drop(event, v) {
+              const dt = event.dataTransfer;
+              if (!dt) return false;
+              const chatText = dt.getData("application/x-skein-chat");
+              if (!chatText) return false;
+              event.preventDefault();
+              const pos = v.posAtCoords({ x: event.clientX, y: event.clientY });
+              if (pos != null) {
+                v.dispatch({
+                  changes: { from: pos, insert: chatText },
+                  selection: { anchor: pos + chatText.length },
+                });
+              } else {
+                insertMarkdown(v, chatText);
+              }
+              return true;
+            },
           }),
           EditorView.updateListener.of((u) => {
             if (u.docChanged) {

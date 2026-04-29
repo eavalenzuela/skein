@@ -127,6 +127,101 @@ fn clean_tag(t: &str) -> String {
         .collect()
 }
 
+/// Pull the persisted "dismissed" tag list out of the page's frontmatter
+/// so subsequent suggest_tags calls don't propose them again. Returns an
+/// empty vec for missing/malformed frontmatter — never errors.
+pub fn parse_dismissed_tags(body: &str) -> Vec<String> {
+    let Some((yaml_block, _)) = split_frontmatter(body) else {
+        return vec![];
+    };
+    let value: serde_yml::Value = match serde_yml::from_str(yaml_block) {
+        Ok(v) => v,
+        Err(_) => return vec![],
+    };
+    let Some(map) = value.as_mapping() else {
+        return vec![];
+    };
+    let key = serde_yml::Value::String("tags_dismissed".into());
+    let entry = match map.get(&key) {
+        Some(v) => v,
+        None => return vec![],
+    };
+    match entry {
+        serde_yml::Value::Sequence(seq) => seq
+            .iter()
+            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+            .collect(),
+        serde_yml::Value::String(s) => vec![s.clone()],
+        _ => vec![],
+    }
+}
+
+/// Append `tag` to the page's `tags_dismissed:` list in frontmatter,
+/// creating the key (and the frontmatter block) if missing. Idempotent.
+pub fn add_dismissed_tag_to_body(body: &str, tag: &str) -> Result<String> {
+    let tag = clean_tag(tag);
+    if tag.is_empty() {
+        return Err(anyhow!("invalid tag"));
+    }
+    if !body.starts_with("---\n") && !body.starts_with("---\r\n") {
+        return Ok(format!(
+            "---\ntags_dismissed: [{tag}]\n---\n\n{}",
+            body.trim_start()
+        ));
+    }
+    let after_open_offset = if body.starts_with("---\r\n") { 5 } else { 4 };
+    let after_open = &body[after_open_offset..];
+    let end_marker = ["\n---\n", "\n---\r\n", "\n---"];
+    let (end_idx, end_len) = end_marker
+        .iter()
+        .filter_map(|m| after_open.find(m).map(|i| (i, m.len())))
+        .min_by_key(|(i, _)| *i)
+        .ok_or_else(|| anyhow!("malformed frontmatter"))?;
+    let yaml_block = &after_open[..end_idx];
+    let rest = &after_open[end_idx + end_len..];
+
+    let mut value: serde_yml::Value = if yaml_block.trim().is_empty() {
+        serde_yml::Value::Mapping(serde_yml::Mapping::new())
+    } else {
+        serde_yml::from_str(yaml_block)
+            .with_context(|| format!("parsing frontmatter: {}", yaml_block))?
+    };
+    let map = value
+        .as_mapping_mut()
+        .ok_or_else(|| anyhow!("frontmatter is not a YAML mapping"))?;
+
+    let key = serde_yml::Value::String("tags_dismissed".into());
+    let entry = map
+        .entry(key)
+        .or_insert(serde_yml::Value::Sequence(Vec::new()));
+    match entry {
+        serde_yml::Value::Sequence(seq) => {
+            if !seq.iter().any(|v| v.as_str() == Some(tag.as_str())) {
+                seq.push(serde_yml::Value::String(tag));
+            }
+        }
+        _ => {
+            *entry = serde_yml::Value::Sequence(vec![serde_yml::Value::String(tag)]);
+        }
+    }
+    let serialized = serde_yml::to_string(&value)?;
+    Ok(format!("---\n{serialized}---\n{rest}"))
+}
+
+fn split_frontmatter(body: &str) -> Option<(&str, &str)> {
+    if !body.starts_with("---\n") && !body.starts_with("---\r\n") {
+        return None;
+    }
+    let after_open_offset = if body.starts_with("---\r\n") { 5 } else { 4 };
+    let after_open = &body[after_open_offset..];
+    let end_marker = ["\n---\n", "\n---\r\n", "\n---"];
+    let (end_idx, end_len) = end_marker
+        .iter()
+        .filter_map(|m| after_open.find(m).map(|i| (i, m.len())))
+        .min_by_key(|(i, _)| *i)?;
+    Some((&after_open[..end_idx], &after_open[end_idx + end_len..]))
+}
+
 /// Insert `tag` into the YAML frontmatter `tags:` list of `body`, preserving
 /// any other frontmatter keys. If no frontmatter exists, prepends one.
 pub fn add_tag_to_body(body: &str, tag: &str) -> Result<String> {
