@@ -6,7 +6,6 @@
     tabsState,
     setActive,
     closeTab,
-    togglePin,
     pinned,
     activeTab,
     openTab,
@@ -94,14 +93,35 @@
   function onPaneDragOver(ev: DragEvent, side: "left" | "right") {
     if (!ev.dataTransfer) return;
     const types = Array.from(ev.dataTransfer.types ?? []);
-    if (!types.includes("application/x-skein-page")) return;
+    const accepts =
+      types.includes("application/x-skein-page") ||
+      types.includes("application/x-skein-book");
+    if (!accepts) return;
     ev.preventDefault();
     ev.dataTransfer.dropEffect = "copy";
     dragSide = side;
   }
 
   async function onPaneDrop(ev: DragEvent, side: "left" | "right") {
-    const payload = parsePagePayload(ev.dataTransfer);
+    const dt = ev.dataTransfer;
+    if (!dt) return;
+    let payload = parsePagePayload(dt);
+    if (!payload) {
+      const bookName = dt.getData("application/x-skein-book");
+      if (bookName) {
+        const { listPagesInBook } = await import("./vault.js");
+        const pages = await listPagesInBook(bookName);
+        const first = pages[0];
+        if (first) {
+          payload = { rel_path: first.rel_path, title: first.title };
+        } else {
+          // Book has no pages — nothing to open.
+          ev.preventDefault();
+          dragSide = null;
+          return;
+        }
+      }
+    }
     if (!payload) return;
     ev.preventDefault();
     dragSide = null;
@@ -133,7 +153,6 @@
               activeId={tabsState.activeId}
               onSelect={setActive}
               onClose={closeTab}
-              onPin={togglePin}
             />
             <div class="sk-surface">
               {#if isSplit}

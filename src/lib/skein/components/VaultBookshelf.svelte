@@ -159,8 +159,11 @@
   function onDragStart(ev: DragEvent, b: Book) {
     if (!ev.dataTransfer) return;
     dragName = b.name;
-    ev.dataTransfer.effectAllowed = "move";
-    // Set _something_ on the dataTransfer so the drag is "valid" in WebKit.
+    // Allow both the "reorder within the shelf" operation and the
+    // "drop onto an editor pane to open the book" operation. The pane
+    // drop handler only consumes x-skein-book; reorder is keyed off
+    // dragName + dragOver state.
+    ev.dataTransfer.effectAllowed = "copyMove";
     ev.dataTransfer.setData("application/x-skein-book", b.name);
   }
 

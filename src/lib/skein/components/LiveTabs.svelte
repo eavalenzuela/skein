@@ -1,24 +1,19 @@
 <script lang="ts">
   import type { Tab } from "../tabs.svelte.js";
-  import { isDirty } from "../tabs.svelte.js";
+  import { isDirty, cyclePin, unpin } from "../tabs.svelte.js";
 
   interface Props {
     tabs: Tab[];
     activeId: string | null;
     onSelect: (relPath: string) => void;
     onClose: (relPath: string) => void;
-    onPin: (relPath: string, side: "left" | "right") => void;
   }
-  let { tabs, activeId, onSelect, onClose, onPin }: Props = $props();
+  let { tabs, activeId, onSelect, onClose }: Props = $props();
 
   function pinClass(pin: Tab["pin"]): string {
     if (pin === "left") return "pinned-l";
     if (pin === "right") return "pinned-r";
     return "";
-  }
-
-  function nextPinSide(pin: Tab["pin"]): "left" | "right" {
-    return pin === "left" ? "right" : "left";
   }
 </script>
 
@@ -32,11 +27,11 @@
           : "Click to pin to a side for split view"}
         onclick={(e) => {
           e.stopPropagation();
-          onPin(tab.rel_path, nextPinSide(tab.pin));
+          cyclePin(tab.rel_path);
         }}
         oncontextmenu={(e) => {
           e.preventDefault();
-          if (tab.pin) onPin(tab.rel_path, tab.pin);
+          if (tab.pin) unpin(tab.rel_path);
         }}
         aria-label="Pin tab"
       >
