@@ -536,6 +536,15 @@
             </button>
           {/if}
         </div>
+        {#if embedderState.busy}
+          <div class="progress" role="progressbar" aria-label="Downloading embedding model">
+            <div class="progress-bar"></div>
+          </div>
+          <p class="muted progress-hint">
+            Streaming the model from Hugging Face — first run only. Skein stays usable; the
+            keyword-overlap fallback handles "Related" until the model is ready.
+          </p>
+        {/if}
         {#if embedderState.error}
           <p class="error">{embedderState.error}</p>
         {/if}
@@ -816,6 +825,33 @@
     display: flex;
     align-items: center;
     gap: 10px;
+  }
+  .progress {
+    margin-top: 10px;
+    width: 100%;
+    height: 4px;
+    background: oklch(from var(--chrome-2) calc(l + 0.04) c h);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .progress-bar {
+    height: 100%;
+    width: 30%;
+    background: var(--accent);
+    border-radius: 2px;
+    animation: indeterminate 1.4s ease-in-out infinite;
+  }
+  .progress-hint {
+    font-size: 11px;
+    margin-top: 6px;
+  }
+  @keyframes indeterminate {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(330%);
+    }
   }
   textarea {
     width: 100%;

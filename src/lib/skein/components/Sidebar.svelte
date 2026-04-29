@@ -5,6 +5,7 @@
   import { activeTab } from "../tabs.svelte.js";
   import { hasSecret, getSettings, setSettings } from "../settings.js";
   import { openSettings } from "../settingsUi.svelte.js";
+  import { titlesState } from "../titles.svelte.js";
   import ChatMessages from "./ChatMessages.svelte";
 
   interface Props {
@@ -14,6 +15,73 @@
 
   let input = $state("");
   let keyConfigured = $state<boolean | null>(null);
+  let prefsError = $state<string | null>(null);
+  let prefsSaved = $state(false);
+  let prefsSavedTimer: ReturnType<typeof setTimeout> | null = null;
+  let textareaEl: HTMLTextAreaElement | undefined = $state();
+  let mentionOpen = $state(false);
+  let mentionQuery = $state("");
+  let mentionActive = $state(0);
+  let mentionAnchor = $state(0); // position of the leading "@"
+
+  let mentionResults = $derived(
+    mentionOpen
+      ? filterTitles(mentionQuery).slice(0, 8)
+      : ([] as { rel_path: string; title: string }[]),
+  );
+
+  function filterTitles(q: string) {
+    const items = titlesState.items;
+    if (!q) return items.slice(0, 8);
+    const term = q.toLowerCase();
+    return items.filter((t) => t.title.toLowerCase().includes(term));
+  }
+
+  function openMentionAtCursor() {
+    if (!textareaEl) return;
+    const pos = textareaEl.selectionStart ?? input.length;
+    // Insert "@" at cursor and arm the picker.
+    input = input.slice(0, pos) + "@" + input.slice(pos);
+    mentionAnchor = pos;
+    mentionQuery = "";
+    mentionOpen = true;
+    mentionActive = 0;
+    requestAnimationFrame(() => {
+      textareaEl?.focus();
+      textareaEl?.setSelectionRange(pos + 1, pos + 1);
+    });
+  }
+
+  function syncMentionFromInput() {
+    if (!mentionOpen || !textareaEl) return;
+    const pos = textareaEl.selectionStart ?? input.length;
+    if (pos < mentionAnchor + 1 || input[mentionAnchor] !== "@") {
+      mentionOpen = false;
+      return;
+    }
+    const between = input.slice(mentionAnchor + 1, pos);
+    if (/\s/.test(between)) {
+      mentionOpen = false;
+      return;
+    }
+    mentionQuery = between;
+    mentionActive = 0;
+  }
+
+  function chooseMention(t: { title: string }) {
+    if (!textareaEl || !mentionOpen) return;
+    const before = input.slice(0, mentionAnchor);
+    const cursorPos = textareaEl.selectionStart ?? input.length;
+    const after = input.slice(cursorPos);
+    const insertion = `[[${t.title}]]`;
+    input = before + insertion + after;
+    mentionOpen = false;
+    const newPos = mentionAnchor + insertion.length;
+    requestAnimationFrame(() => {
+      textareaEl?.focus();
+      textareaEl?.setSelectionRange(newPos, newPos);
+    });
+  }
 
   onMount(async () => {
     await attachChatBus();
@@ -38,11 +106,20 @@
     }
   });
 
-  function persistChatPrefs() {
-    void setSettings({
-      chat_model: chatState.model,
-      chat_context_mode: chatState.contextMode,
-    });
+  async function persistChatPrefs() {
+    prefsError = null;
+    try {
+      await setSettings({
+        chat_model: chatState.model,
+        chat_context_mode: chatState.contextMode,
+      });
+      prefsSaved = true;
+      if (prefsSavedTimer) clearTimeout(prefsSavedTimer);
+      prefsSavedTimer = setTimeout(() => (prefsSaved = false), 1500);
+    } catch (e) {
+      // Surface so the user knows their model/context choice didn't stick.
+      prefsError = `Couldn't save preference: ${String(e)}`;
+    }
   }
 
   async function refreshKey() {
@@ -65,10 +142,50 @@
   }
 
   function onKey(e: KeyboardEvent) {
+    if (mentionOpen) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        mentionOpen = false;
+        return;
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        if (mentionResults.length > 0)
+          mentionActive = (mentionActive + 1) % mentionResults.length;
+        return;
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        if (mentionResults.length > 0)
+          mentionActive = (mentionActive - 1 + mentionResults.length) % mentionResults.length;
+        return;
+      } else if (e.key === "Enter" || e.key === "Tab") {
+        const pick = mentionResults[mentionActive];
+        if (pick) {
+          e.preventDefault();
+          chooseMention(pick);
+          return;
+        }
+      }
+    }
+    if (e.key === "@") {
+      // Defer: textarea will insert the @, then we arm the picker.
+      requestAnimationFrame(() => {
+        if (!textareaEl) return;
+        mentionAnchor = (textareaEl.selectionStart ?? 1) - 1;
+        if (input[mentionAnchor] !== "@") return;
+        mentionQuery = "";
+        mentionOpen = true;
+        mentionActive = 0;
+      });
+      return;
+    }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       void onSubmit();
     }
+  }
+
+  function onInput() {
+    syncMentionFromInput();
   }
 
   function modelLabel(id: string): string {
@@ -78,7 +195,7 @@
   function cycleModel() {
     const idx = CHAT_MODELS.findIndex((m) => m.id === chatState.model);
     chatState.model = CHAT_MODELS[(idx + 1) % CHAT_MODELS.length].id;
-    persistChatPrefs();
+    void persistChatPrefs();
   }
 
   const CONTEXT_OPTIONS: { id: ContextMode; label: string }[] = [
@@ -90,7 +207,7 @@
   function cycleContext() {
     const idx = CONTEXT_OPTIONS.findIndex((c) => c.id === chatState.contextMode);
     chatState.contextMode = CONTEXT_OPTIONS[(idx + 1) % CONTEXT_OPTIONS.length].id;
-    persistChatPrefs();
+    void persistChatPrefs();
   }
 
   function contextLabel(): string {
@@ -161,6 +278,12 @@
         </span>
       </button>
       <div class="sk-side-spacer"></div>
+      {#if prefsSaved}
+        <span class="prefs-flash" aria-live="polite">saved</span>
+      {/if}
+      {#if prefsError}
+        <span class="prefs-error" title={prefsError} aria-live="polite">! save failed</span>
+      {/if}
     </div>
 
     {#if keyConfigured === false}
@@ -174,18 +297,39 @@
 
     <div class="sk-input">
       <textarea
+        bind:this={textareaEl}
         bind:value={input}
         placeholder={chatState.messages.length === 0
           ? "Ask Claude about this note"
           : "Continue the conversation"}
         onkeydown={onKey}
+        oninput={onInput}
         rows="2"
         disabled={chatState.busy}
       ></textarea>
+      {#if mentionOpen && mentionResults.length > 0}
+        <ul class="mention-popup" role="listbox" aria-label="Mention a page">
+          {#each mentionResults as item, i (item.rel_path)}
+            <!-- svelte-ignore a11y_click_events_have_key_events -->
+            <li
+              class:active={i === mentionActive}
+              onclick={() => chooseMention(item)}
+              onmouseenter={() => (mentionActive = i)}
+              role="option"
+              aria-selected={i === mentionActive}
+            >
+              <span class="mt">{item.title}</span>
+              <span class="mr">{item.rel_path}</span>
+            </li>
+          {/each}
+        </ul>
+      {/if}
       <div class="sk-input-btns">
         <div class="left">
-          <button disabled title="Coming soon: type @ in the message to mention a page"
-            >@ Mention</button
+          <button
+            onclick={openMentionAtCursor}
+            title="Mention a page (or type @ in the message)"
+            disabled={chatState.busy}>@ Mention</button
           >
         </div>
         <button class="send" onclick={onSubmit} disabled={chatState.busy || !input.trim()}>
@@ -250,5 +394,57 @@
   }
   .key-hint button:hover {
     background: oklch(from var(--accent) l c h / 0.28);
+  }
+  .prefs-flash {
+    font-size: 10.5px;
+    color: var(--accent);
+    font-style: italic;
+    align-self: center;
+    animation: fade-in 120ms ease-in;
+  }
+  .prefs-error {
+    font-size: 10.5px;
+    color: oklch(0.65 0.18 25);
+    align-self: center;
+    cursor: help;
+  }
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  .mention-popup {
+    list-style: none;
+    margin: 0;
+    padding: 4px 0;
+    background: var(--chrome-2);
+    border: 1px solid var(--chrome-edge);
+    border-radius: 6px;
+    box-shadow: 0 8px 24px oklch(0 0 0 / 0.45);
+    max-height: 220px;
+    overflow: auto;
+    margin-top: 6px;
+  }
+  .mention-popup li {
+    padding: 6px 10px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+  .mention-popup li.active {
+    background: var(--accent-soft);
+  }
+  .mention-popup .mt {
+    font-size: 12px;
+    color: var(--ink);
+  }
+  .mention-popup .mr {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    color: var(--ink-4);
   }
 </style>

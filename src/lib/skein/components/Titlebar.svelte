@@ -1,15 +1,146 @@
 <script lang="ts">
   import { openSearch } from "../searchUi.svelte.js";
   import { openSettings } from "../settingsUi.svelte.js";
-  import { openTodayDaily } from "../vault.js";
-  import { openTab } from "../tabs.svelte.js";
-  import { close as closeVault } from "../vault.svelte.js";
+  import { openTodayDaily, createPage, rebuildIndex } from "../vault.js";
+  import { openTab, closeTab, tabsState } from "../tabs.svelte.js";
+  import { close as closeVault, vaultState } from "../vault.svelte.js";
   import { getCurrentWindow } from "@tauri-apps/api/window";
+  import ContextMenu, { type MenuItem } from "./ContextMenu.svelte";
 
   interface Props {
     vault: string;
   }
   let { vault }: Props = $props();
+
+  type MenuName = "file" | "edit" | "view" | "help";
+  let openMenu = $state<MenuName | null>(null);
+  let menuPos = $state<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  function showMenu(name: MenuName, e: MouseEvent) {
+    const t = e.currentTarget as HTMLElement;
+    const rect = t.getBoundingClientRect();
+    menuPos = { x: rect.left, y: rect.bottom + 2 };
+    openMenu = name;
+  }
+  function closeMenu() {
+    openMenu = null;
+  }
+
+  async function newPagePrompt() {
+    const title = window.prompt("Title for the new page:");
+    if (!title?.trim()) return;
+    const rel = await createPage(null, title.trim());
+    await openTab({ rel_path: rel, title: title.trim() });
+  }
+
+  function activeTabRel(): string | null {
+    return tabsState.activeId;
+  }
+
+  const fileItems: MenuItem[] = [
+    { label: "New page…", action: () => void newPagePrompt() },
+    { label: "Today's daily note", action: () => void jumpToToday() },
+    { separator: true, label: "", action: () => {} },
+    { label: "Switch vault…", action: () => void closeVault() },
+    { separator: true, label: "", action: () => {} },
+    { label: "Quit", action: () => void winClose() },
+  ];
+  const editItems: MenuItem[] = [
+    {
+      label: "Undo",
+      action: () => document.execCommand?.("undo"),
+    },
+    {
+      label: "Redo",
+      action: () => document.execCommand?.("redo"),
+    },
+    { separator: true, label: "", action: () => {} },
+    {
+      label: "Cut",
+      action: () => document.execCommand?.("cut"),
+    },
+    {
+      label: "Copy",
+      action: () => document.execCommand?.("copy"),
+    },
+    {
+      label: "Paste",
+      action: () => document.execCommand?.("paste"),
+    },
+    { separator: true, label: "", action: () => {} },
+    { label: "Find in vault…", action: () => void openSearch() },
+  ];
+  const viewItems: MenuItem[] = [
+    {
+      label: "Close active tab",
+      action: () => {
+        const a = activeTabRel();
+        if (a) closeTab(a);
+      },
+    },
+    {
+      label: "Rebuild search index",
+      action: () => void rebuildIndex(),
+    },
+    { separator: true, label: "", action: () => {} },
+    { label: "Settings…", action: () => openSettings() },
+    {
+      label: "Toggle full-screen",
+      action: () => void toggleFullscreen(),
+    },
+  ];
+  const helpItems: MenuItem[] = [
+    {
+      label: "Skein on GitHub",
+      action: () => {
+        window.open("https://github.com/anthropics/skein", "_blank");
+      },
+    },
+    {
+      label: "Keyboard shortcuts",
+      action: () => {
+        window.alert(
+          "Skein keyboard shortcuts:\n\n" +
+            "Ctrl+K — Search / command palette\n" +
+            "Ctrl+, — Settings\n" +
+            "Esc — Close modal\n" +
+            "↑↓ Enter — Navigate / open in palette\n" +
+            "Right-click — Context menu on books and pages\n" +
+            "Drag book spine — Reorder shelf or open in pane",
+        );
+      },
+    },
+    { separator: true, label: "", action: () => {} },
+    {
+      label: "About Skein",
+      action: () => {
+        window.alert(
+          "Skein — local note-taking with semantic search and an embedded Claude chat.\n\n" +
+            `Vault: ${vaultState.vault?.name ?? "(none)"}\n` +
+            `Path: ${vaultState.vault?.root ?? "(none)"}`,
+        );
+      },
+    },
+  ];
+
+  function itemsFor(name: MenuName): MenuItem[] {
+    switch (name) {
+      case "file":
+        return fileItems;
+      case "edit":
+        return editItems;
+      case "view":
+        return viewItems;
+      case "help":
+        return helpItems;
+    }
+  }
+
+  async function toggleFullscreen() {
+    const w = getCurrentWindow();
+    const isFs = await w.isFullscreen();
+    await w.setFullscreen(!isFs);
+  }
 
   async function jumpToToday() {
     try {
@@ -36,6 +167,17 @@
 </script>
 
 <div class="sk-titlebar">
+  <div class="sk-tb-menus">
+    {#each ["file", "edit", "view", "help"] as name (name)}
+      <button
+        class="sk-tb-menu bare"
+        class:active={openMenu === name}
+        onclick={(e) => showMenu(name as MenuName, e)}
+      >
+        {name[0].toUpperCase() + name.slice(1)}
+      </button>
+    {/each}
+  </div>
   <div class="sk-tb-title">
     Skein <span class="vault">— {vault}</span>
   </div>
@@ -149,6 +291,10 @@
   </div>
 </div>
 
+{#if openMenu}
+  <ContextMenu x={menuPos.x} y={menuPos.y} items={itemsFor(openMenu)} onclose={closeMenu} />
+{/if}
+
 <style>
   .bare {
     background: transparent;
@@ -156,5 +302,11 @@
     cursor: pointer;
     color: inherit;
     font: inherit;
+  }
+  .sk-tb-menu.bare {
+    cursor: pointer;
+  }
+  .sk-tb-menu.active {
+    background: oklch(1 0 0 / 0.08);
   }
 </style>

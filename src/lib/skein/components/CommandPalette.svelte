@@ -1,32 +1,136 @@
 <script lang="ts">
-  import { searchPages, type SearchHit } from "../vault.js";
+  import {
+    searchPages,
+    type SearchHit,
+    openTodayDaily,
+    rebuildIndex,
+    createPage,
+  } from "../vault.js";
   import { openTab } from "../tabs.svelte.js";
   import { closeSearch } from "../searchUi.svelte.js";
+  import { openSettings } from "../settingsUi.svelte.js";
+  import { close as closeVaultStore, vaultState } from "../vault.svelte.js";
+  import { downloadModel } from "../embedder.svelte.js";
+
+  interface Command {
+    id: string;
+    label: string;
+    keywords: string;
+    hint?: string;
+    run: () => Promise<void> | void;
+  }
+
+  const COMMANDS: Command[] = [
+    {
+      id: "settings",
+      label: "Open settings",
+      keywords: "settings preferences config",
+      hint: "Ctrl+,",
+      run: () => {
+        closeSearch();
+        openSettings();
+      },
+    },
+    {
+      id: "today",
+      label: "Open today's daily note",
+      keywords: "daily today journal",
+      run: async () => {
+        const res = await openTodayDaily();
+        const stem = res.rel_path.split("/").pop()?.replace(/\.md$/, "") ?? res.rel_path;
+        await openTab({ rel_path: res.rel_path, title: stem });
+        closeSearch();
+      },
+    },
+    {
+      id: "new-page-folio",
+      label: "New page in Folio (loose)…",
+      keywords: "new page create folio loose",
+      run: async () => {
+        const title = window.prompt("Title for the new page:");
+        if (!title || !title.trim()) return;
+        const rel = await createPage(null, title.trim());
+        await openTab({ rel_path: rel, title: title.trim() });
+        closeSearch();
+      },
+    },
+    {
+      id: "switch-vault",
+      label: "Switch vault — close this one",
+      keywords: "vault switch close picker",
+      run: async () => {
+        await closeVaultStore();
+        closeSearch();
+      },
+    },
+    {
+      id: "rebuild-index",
+      label: "Rebuild search index",
+      keywords: "rebuild reindex search index",
+      run: async () => {
+        await rebuildIndex();
+        closeSearch();
+      },
+    },
+    {
+      id: "download-model",
+      label: "Download local embedding model (~130 MB)",
+      keywords: "download embedder bge model semantic",
+      run: async () => {
+        closeSearch();
+        openSettings();
+        await downloadModel();
+      },
+    },
+  ];
 
   let query = $state("");
   let hits = $state<SearchHit[]>([]);
+  let cmdHits = $state<Command[]>([]);
   let active = $state(0);
   let loading = $state(false);
   let lastQuery = "";
   let pending = 0;
   let inputEl: HTMLInputElement | undefined = $state();
 
+  let isCommandMode = $derived(query.startsWith(":"));
+  let resultCount = $derived(isCommandMode ? cmdHits.length : hits.length);
+
   $effect(() => {
     inputEl?.focus();
   });
 
+  function filterCommands(q: string): Command[] {
+    const term = q.replace(/^:/, "").trim().toLowerCase();
+    if (!term) return COMMANDS;
+    return COMMANDS.filter(
+      (c) =>
+        c.label.toLowerCase().includes(term) ||
+        c.keywords.toLowerCase().includes(term),
+    );
+  }
+
   async function runSearch(q: string) {
     if (q.trim() === "") {
       hits = [];
+      cmdHits = [];
       active = 0;
+      return;
+    }
+    if (q.startsWith(":")) {
+      cmdHits = filterCommands(q);
+      hits = [];
+      active = 0;
+      loading = false;
       return;
     }
     const myToken = ++pending;
     loading = true;
     try {
       const result = await searchPages(q, 30);
-      if (myToken !== pending) return; // a newer query started
+      if (myToken !== pending) return;
       hits = result;
+      cmdHits = [];
       active = 0;
     } catch {
       if (myToken === pending) hits = [];
@@ -48,22 +152,38 @@
     closeSearch();
   }
 
+  async function selectCommand(cmd: Command) {
+    try {
+      await cmd.run();
+    } catch (e) {
+      console.error("command failed", cmd.id, e);
+    }
+  }
+
   function onKeydown(e: KeyboardEvent) {
     if (e.key === "Escape") {
       e.preventDefault();
       closeSearch();
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
-      if (hits.length > 0) active = (active + 1) % hits.length;
+      if (resultCount > 0) active = (active + 1) % resultCount;
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      if (hits.length > 0) active = (active - 1 + hits.length) % hits.length;
+      if (resultCount > 0) active = (active - 1 + resultCount) % resultCount;
     } else if (e.key === "Enter") {
       e.preventDefault();
-      const hit = hits[active];
-      if (hit) selectHit(hit);
+      if (isCommandMode) {
+        const cmd = cmdHits[active];
+        if (cmd) void selectCommand(cmd);
+      } else {
+        const hit = hits[active];
+        if (hit) selectHit(hit);
+      }
     }
   }
+
+  // Suppress an unused-import warning on builds that tree-shake.
+  void vaultState;
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -80,7 +200,7 @@
       bind:this={inputEl}
       bind:value={query}
       type="text"
-      placeholder="Search pages…"
+      placeholder="Search pages — start with : for commands"
       onkeydown={onKeydown}
       autocomplete="off"
       spellcheck="false"
@@ -89,31 +209,53 @@
       <span
         >{loading
           ? "searching…"
-          : hits.length
-            ? `${hits.length} match${hits.length === 1 ? "" : "es"}`
-            : query.trim()
-              ? "no matches"
-              : "type to search"}</span
+          : isCommandMode
+            ? cmdHits.length
+              ? `${cmdHits.length} command${cmdHits.length === 1 ? "" : "s"}`
+              : "no matching commands"
+            : hits.length
+              ? `${hits.length} match${hits.length === 1 ? "" : "es"}`
+              : query.trim()
+                ? "no matches"
+                : "type to search · : for commands"}</span
       >
       <span class="kbd">↑↓ navigate · ⏎ open · esc close</span>
     </div>
     <ul class="results">
-      {#each hits as hit, i (hit.rel_path)}
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <li
-          class:active={i === active}
-          onclick={() => selectHit(hit)}
-          onmouseenter={() => (active = i)}
-          role="option"
-          aria-selected={i === active}
-        >
-          <div class="ttl">{hit.title}</div>
-          <div class="rp">{hit.book ?? "Folio"} · {hit.rel_path}</div>
-          <!-- snippet contains <mark> tags from FTS5 -->
-          <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-          <div class="snip">{@html hit.snippet}</div>
-        </li>
-      {/each}
+      {#if isCommandMode}
+        {#each cmdHits as cmd, i (cmd.id)}
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <li
+            class:active={i === active}
+            onclick={() => selectCommand(cmd)}
+            onmouseenter={() => (active = i)}
+            role="option"
+            aria-selected={i === active}
+          >
+            <div class="ttl cmd-row">
+              <span class="cmd-label">{cmd.label}</span>
+              {#if cmd.hint}<span class="cmd-hint">{cmd.hint}</span>{/if}
+            </div>
+          </li>
+        {/each}
+      {:else}
+        {#each hits as hit, i (hit.rel_path)}
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <li
+            class:active={i === active}
+            onclick={() => selectHit(hit)}
+            onmouseenter={() => (active = i)}
+            role="option"
+            aria-selected={i === active}
+          >
+            <div class="ttl">{hit.title}</div>
+            <div class="rp">{hit.book ?? "Folio"} · {hit.rel_path}</div>
+            <!-- snippet contains <mark> tags from FTS5 -->
+            <!-- eslint-disable-next-line svelte/no-at-html-tags -->
+            <div class="snip">{@html hit.snippet}</div>
+          </li>
+        {/each}
+      {/if}
     </ul>
   </div>
 </div>
@@ -210,5 +352,19 @@
     color: var(--accent);
     padding: 0 2px;
     border-radius: 2px;
+  }
+  .cmd-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+  .cmd-hint {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10.5px;
+    color: var(--ink-4);
+    border: 1px solid var(--chrome-edge);
+    border-radius: 3px;
+    padding: 1px 5px;
   }
 </style>

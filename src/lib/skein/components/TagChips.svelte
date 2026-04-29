@@ -107,12 +107,15 @@
   }
 
   async function dismiss(tag: string) {
+    const before = suggestions;
     suggestions = suggestions.filter((s) => s !== tag);
     try {
       await dismissTag(tab.rel_path, tag);
     } catch (e) {
-      // Don't surface — the chip is already gone visually. Log only.
-      console.error("dismissTag", e);
+      // Backend rejected the dismissal — the suggestion is still live and
+      // would reappear on reload. Restore the chip and surface the error.
+      suggestions = before;
+      error = `Couldn't dismiss "${tag}": ${String(e)}`;
     }
   }
 </script>
