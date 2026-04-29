@@ -29,3 +29,8 @@ src-tauri/gen/
 
 # Logs
 *.log
+
+# Playwright
+/test-results/
+/playwright-report/
+/playwright/.cache/
