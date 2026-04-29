@@ -1,19 +1,19 @@
 mod archive;
 mod attachments;
 mod autotag;
-mod books;
+pub mod books;
 mod chat;
-mod chunker;
+pub mod chunker;
 mod commands;
 mod daily;
-mod embedder;
+pub mod embedder;
 mod git_sync;
-mod index;
-mod pages;
+pub mod index;
+pub mod pages;
 mod secrets;
 mod settings;
 mod state;
-mod vault;
+pub mod vault;
 mod watcher;
 
 use std::io::Write;

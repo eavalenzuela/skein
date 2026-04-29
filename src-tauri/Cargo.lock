@@ -5188,6 +5188,7 @@ dependencies = [
  "tauri-plugin-clipboard-manager",
  "tauri-plugin-dialog",
  "tauri-plugin-notification",
+ "tempfile",
  "tokio",
  "uuid",
  "walkdir",
