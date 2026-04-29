@@ -3,6 +3,7 @@
   import type { Tab } from "../tabs.svelte.js";
   import { suggestTags, applyTag, dismissTag } from "../vault.js";
   import { hasSecret } from "../settings.js";
+  import { parseFrontmatterTags } from "../frontmatter.js";
 
   interface Props {
     tab: Tab;
@@ -40,44 +41,13 @@
     try {
       const res = await suggestTags(tab.rel_path);
       // Filter out tags already present (parse them from the body's frontmatter quickly).
-      const existing = parseExistingTags(tab.body);
+      const existing = parseFrontmatterTags(tab.body);
       suggestions = res.filter((t) => !existing.has(t));
     } catch (e) {
       error = String(e);
     } finally {
       loading = false;
     }
-  }
-
-  function parseExistingTags(body: string): Set<string> {
-    const m = body.match(/^---\r?\n([\s\S]*?)\r?\n---/);
-    if (!m) return new Set();
-    const fm = m[1];
-    // Match either `tags: [a, b]` or block-form `tags:\n  - a\n  - b`
-    const inline = fm.match(/^tags:\s*\[([^\]]*)\]/m);
-    if (inline) {
-      return new Set(
-        inline[1]
-          .split(",")
-          .map((s) => s.trim().replace(/^["']|["']$/g, ""))
-          .filter(Boolean),
-      );
-    }
-    const block = fm.match(/^tags:\s*\n((?:\s*-\s*.+\n?)+)/m);
-    if (block) {
-      return new Set(
-        block[1]
-          .split("\n")
-          .map((l) =>
-            l
-              .replace(/^\s*-\s*/, "")
-              .trim()
-              .replace(/^["']|["']$/g, ""),
-          )
-          .filter(Boolean),
-      );
-    }
-    return new Set();
   }
 
   // Trigger 3s after the last edit on this tab (or when switching to a new tab).
