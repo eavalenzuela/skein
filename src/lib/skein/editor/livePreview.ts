@@ -17,16 +17,74 @@ import {
   Decoration,
   EditorView,
   ViewPlugin,
+  WidgetType,
   type DecorationSet,
   type ViewUpdate,
 } from "@codemirror/view";
-import { type EditorState, RangeSetBuilder } from "@codemirror/state";
+import {
+  Facet,
+  type EditorState,
+  RangeSetBuilder,
+  type Extension,
+} from "@codemirror/state";
+import { convertFileSrc } from "@tauri-apps/api/core";
 
 const hideMark = Decoration.replace({});
 const wikilinkMark = Decoration.mark({ class: "sk-wikilink" });
 const tagMark = Decoration.mark({ class: "sk-tag" });
 const blockquoteLine = Decoration.line({ class: "sk-blockquote" });
 const codeBlockLine = Decoration.line({ class: "sk-code-block" });
+
+// Per-editor context: vault root + the current page's vault-relative path.
+// Used to resolve relative image refs in `![](...)` to absolute file URLs
+// the webview can load via Tauri's asset protocol.
+export interface PageContext {
+  vaultRoot: string;
+  pageRelPath: string;
+}
+export const pageContextFacet = Facet.define<PageContext, PageContext | null>({
+  combine: (values) => values[0] ?? null,
+});
+
+class ImageWidget extends WidgetType {
+  constructor(readonly src: string, readonly alt: string) {
+    super();
+  }
+  eq(other: ImageWidget): boolean {
+    return other.src === this.src && other.alt === this.alt;
+  }
+  toDOM(): HTMLElement {
+    const img = document.createElement("img");
+    img.className = "sk-img";
+    img.src = this.src;
+    img.alt = this.alt;
+    return img;
+  }
+  ignoreEvent(): boolean {
+    return false;
+  }
+}
+
+function resolveImageSrc(ctx: PageContext, ref: string): string | null {
+  // Skip remote refs — let the markdown source stand.
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(ref) || ref.startsWith("//")) {
+    return null;
+  }
+  let abs: string;
+  if (ref.startsWith("/")) {
+    abs = ref;
+  } else {
+    const slash = ctx.pageRelPath.lastIndexOf("/");
+    const folder = slash === -1 ? "" : ctx.pageRelPath.slice(0, slash + 1);
+    const root = ctx.vaultRoot.endsWith("/") ? ctx.vaultRoot : ctx.vaultRoot + "/";
+    abs = root + folder + ref;
+  }
+  try {
+    return convertFileSrc(abs);
+  } catch {
+    return null;
+  }
+}
 
 function lineOfPos(state: EditorState, pos: number): number {
   return state.doc.lineAt(pos).number;
@@ -62,8 +120,9 @@ function buildDecorations(view: EditorView): DecorationSet {
   const state = view.state;
   const tree = syntaxTree(state);
   const ranges: RangedDeco[] = [];
+  const pageCtx = state.facet(pageContextFacet);
 
-  // Wikilinks + tags via regex over visible text.
+  // Wikilinks + tags + image refs via regex over visible text.
   for (const { from, to } of view.visibleRanges) {
     const text = state.doc.sliceString(from, to);
 
@@ -80,6 +139,23 @@ function buildDecorations(view: EditorView): DecorationSet {
       const tagStart = from + m.index + m[1].length;
       const tagEnd = tagStart + m[2].length;
       ranges.push({ from: tagStart, to: tagEnd, deco: tagMark, rank: 1 });
+    }
+
+    if (pageCtx) {
+      const imgRe = /!\[([^\]\n]*)\]\(([^)\n]+)\)/g;
+      while ((m = imgRe.exec(text)) !== null) {
+        const start = from + m.index;
+        const end = start + m[0].length;
+        if (selectionOnLine(state, start)) continue;
+        const src = resolveImageSrc(pageCtx, m[2].trim());
+        if (!src) continue;
+        ranges.push({
+          from: start,
+          to: end,
+          deco: Decoration.replace({ widget: new ImageWidget(src, m[1]) }),
+          rank: 2,
+        });
+      }
     }
   }
 
@@ -159,7 +235,13 @@ export const skeinLivePreview = ViewPlugin.fromClass(
       this.decorations = buildDecorations(view);
     }
     update(update: ViewUpdate) {
-      if (update.docChanged || update.selectionSet || update.viewportChanged) {
+      if (
+        update.docChanged ||
+        update.selectionSet ||
+        update.viewportChanged ||
+        update.startState.facet(pageContextFacet) !==
+          update.state.facet(pageContextFacet)
+      ) {
         this.decorations = buildDecorations(update.view);
       }
     }
@@ -168,3 +250,7 @@ export const skeinLivePreview = ViewPlugin.fromClass(
     decorations: (v) => v.decorations,
   },
 );
+
+export function pageContextExtension(ctx: PageContext): Extension {
+  return pageContextFacet.of(ctx);
+}

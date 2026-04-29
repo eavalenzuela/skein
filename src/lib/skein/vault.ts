@@ -90,3 +90,13 @@ export interface DailyResult {
 }
 
 export const openTodayDaily = () => invoke<DailyResult>("open_today_daily");
+
+export const saveAttachment = (pageRelPath: string, ext: string, bytes: Uint8Array) =>
+  invoke<string>("save_attachment", {
+    pageRelPath,
+    ext,
+    bytes: Array.from(bytes),
+  });
+
+export const saveAttachmentFromPath = (pageRelPath: string, srcPath: string) =>
+  invoke<string>("save_attachment_from_path", { pageRelPath, srcPath });

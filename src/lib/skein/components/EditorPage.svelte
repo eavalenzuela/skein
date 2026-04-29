@@ -15,7 +15,11 @@
     <div class="loading">Loading…</div>
   {:else}
     <TagChips {tab} />
-    <Editor doc={tab.body} onChange={(next) => setBody(tab.rel_path, next)} />
+    <Editor
+      doc={tab.body}
+      relPath={tab.rel_path}
+      onChange={(next) => setBody(tab.rel_path, next)}
+    />
   {/if}
 </div>
 

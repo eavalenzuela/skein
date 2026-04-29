@@ -126,6 +126,13 @@ export const skeinEditorTheme = EditorView.theme(
       display: "inline-block",
       width: "100%",
     },
+    ".sk-img": {
+      maxWidth: "100%",
+      maxHeight: "480px",
+      borderRadius: "4px",
+      display: "block",
+      margin: "6px 0",
+    },
   },
   { dark: true },
 );

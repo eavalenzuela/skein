@@ -4,6 +4,7 @@ use std::sync::Arc;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, Runtime, State};
 
+use crate::attachments;
 use crate::autotag;
 use crate::chat::{self, ChatMessageIn};
 use crate::daily::{self, DailyResult};
@@ -309,6 +310,27 @@ pub fn apply_tag(rel_path: String, tag: String, state: State<'_, AppState>) -> R
         }
     }
     Ok(())
+}
+
+#[tauri::command]
+pub fn save_attachment(
+    page_rel_path: String,
+    ext: String,
+    bytes: Vec<u8>,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    let vault = state.vault().ok_or("no vault open")?;
+    attachments::save_attachment(&vault, &page_rel_path, &ext, &bytes).map_err(err)
+}
+
+#[tauri::command]
+pub fn save_attachment_from_path(
+    page_rel_path: String,
+    src_path: String,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    let vault = state.vault().ok_or("no vault open")?;
+    attachments::save_attachment_from_path(&vault, &page_rel_path, &src_path).map_err(err)
 }
 
 #[tauri::command]

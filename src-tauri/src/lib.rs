@@ -1,3 +1,4 @@
+mod attachments;
 mod autotag;
 mod chat;
 mod chunker;
@@ -22,6 +23,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .manage(AppState::default())
         .setup(|app| {
             let handle = app.handle().clone();
@@ -57,6 +59,8 @@ pub fn run() {
             commands::suggest_tags,
             commands::apply_tag,
             commands::open_today_daily,
+            commands::save_attachment,
+            commands::save_attachment_from_path,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
