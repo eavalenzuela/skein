@@ -90,6 +90,7 @@
 
   function openRowMenu(ev: MouseEvent, p: Page) {
     ev.preventDefault();
+    ev.stopPropagation();
     menu = {
       x: ev.clientX,
       y: ev.clientY,
