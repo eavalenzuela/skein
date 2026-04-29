@@ -178,7 +178,10 @@
   {/if}
 
   {#if pages.length === 0 && !creating}
-    <p class="empty">No pages yet. Click + to create one.</p>
+    <p class="empty">
+      No pages yet. Click <strong>+</strong> to create one, or right-click anywhere here for the
+      page menu.
+    </p>
   {:else if pages.length > 0}
     <ul>
       {#each pages as p (p.rel_path)}
@@ -207,6 +210,7 @@
               onclick={() => openTab(p)}
               oncontextmenu={(e) => openRowMenu(e, p)}
               draggable="true"
+              title="Click to open · drag to a pane to pin · right-click for rename / delete"
               ondragstart={(e) => {
                 if (!e.dataTransfer) return;
                 const payload = JSON.stringify({ rel_path: p.rel_path, title: p.title });

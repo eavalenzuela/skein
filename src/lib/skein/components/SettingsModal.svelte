@@ -117,10 +117,32 @@
   let gitBranch = $state("main");
   let gitAuthKind = $state<"none" | "token" | "ssh-agent">("none");
   let gitStatusData = $state<GitStatus | null>(null);
+  let gitStatusFetchedAt = $state<number | null>(null);
+  let gitStatusAgeNow = $state(Date.now());
   let gitBusy = $state(false);
   let gitMessage = $state<string | null>(null);
   let gitError = $state<string | null>(null);
   let gitCommitMsg = $state("");
+
+  // Tick once a second so the "fetched Ns ago" label updates while the
+  // modal is open. Cleared in onDestroy via the effect's return.
+  $effect(() => {
+    const t = setInterval(() => {
+      gitStatusAgeNow = Date.now();
+    }, 1000);
+    return () => clearInterval(t);
+  });
+
+  function gitFreshnessLabel(): string {
+    if (gitStatusFetchedAt == null) return "not fetched yet";
+    const sec = Math.max(0, Math.round((gitStatusAgeNow - gitStatusFetchedAt) / 1000));
+    if (sec < 5) return "just now";
+    if (sec < 60) return `${sec}s ago`;
+    const min = Math.round(sec / 60);
+    if (min < 60) return `${min}m ago`;
+    const hr = Math.round(min / 60);
+    return `${hr}h ago`;
+  }
 
   async function loadGitConfig() {
     try {
@@ -138,6 +160,8 @@
   async function refreshGitStatus() {
     try {
       gitStatusData = await gitStatus();
+      gitStatusFetchedAt = Date.now();
+      gitStatusAgeNow = gitStatusFetchedAt;
     } catch (e) {
       gitError = String(e);
     }
@@ -438,6 +462,9 @@
 
           {#if gitStatusData}
             <div class="kv">
+              <div class="v muted git-fresh">
+                Status fetched <span class="git-age">{gitFreshnessLabel()}</span>
+              </div>
               {#if !gitStatusData.initialized}
                 <div class="v muted">Not a git repo yet — enter a remote URL and save.</div>
               {:else}
@@ -852,6 +879,16 @@
     100% {
       transform: translateX(330%);
     }
+  }
+  .git-fresh {
+    margin-bottom: 4px;
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .git-age {
+    color: var(--ink-3);
+    font-family: "JetBrains Mono", monospace;
   }
   textarea {
     width: 100%;

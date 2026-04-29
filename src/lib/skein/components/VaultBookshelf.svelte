@@ -245,10 +245,53 @@
     dragName = null;
     dragOver = null;
   }
+
+  // Type-to-jump: a letter focuses the first book starting with it.
+  // Repeated presses cycle through matches. Buffered for ~1s so
+  // multi-letter prefixes like "Re" → Recipes work.
+  let typeBuf = "";
+  let typeBufTimer: ReturnType<typeof setTimeout> | null = null;
+  let typeMatchIdx = 0;
+  let typeLastBuf = "";
+
+  function onShelfKey(e: KeyboardEvent) {
+    if (creating || renamingName) return;
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    const k = e.key;
+    if (k === "Escape") {
+      typeBuf = "";
+      return;
+    }
+    if (k.length !== 1 || !/[\w'-]/.test(k)) return;
+    e.preventDefault();
+    if (typeBufTimer) clearTimeout(typeBufTimer);
+    typeBuf += k.toLowerCase();
+    typeBufTimer = setTimeout(() => {
+      typeBuf = "";
+    }, 1000);
+    if (typeBuf !== typeLastBuf) typeMatchIdx = 0;
+    typeLastBuf = typeBuf;
+    const matches = books
+      .map((b, i) => ({ b, i }))
+      .filter(({ b }) => b.name.toLowerCase().startsWith(typeBuf));
+    if (matches.length === 0) return;
+    const target = matches[typeMatchIdx % matches.length];
+    typeMatchIdx++;
+    const btns = document.querySelectorAll<HTMLButtonElement>(
+      ".sk-shelf .bare:not(.add-slot)",
+    );
+    // Index 0 is the Folio button; books start at +1.
+    const el = btns[target.i + 1];
+    el?.focus();
+  }
 </script>
 
+<!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
   class="sk-shelf style-{style}"
+  role="toolbar"
+  aria-label="Bookshelf — type a letter to jump to a book"
+  tabindex="0"
   oncontextmenu={(e) => {
     // Only open the shelf menu when the right-click landed on shelf
     // background (a row gap or empty slot) — not on a child button.
@@ -256,6 +299,7 @@
     if (t.closest("button.bare") || t.closest(".sk-spine")) return;
     openShelfMenu(e);
   }}
+  onkeydown={onShelfKey}
 >
   {#each rows as row, ri (ri)}
     <div class="sk-shelf-row">

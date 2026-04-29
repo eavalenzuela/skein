@@ -19,6 +19,21 @@
   let { x, y, items, onclose }: Props = $props();
 
   let menuEl: HTMLDivElement;
+  let active = $state(firstSelectable(items));
+
+  function firstSelectable(list: MenuItem[]): number {
+    for (let i = 0; i < list.length; i++) if (!list[i].separator) return i;
+    return 0;
+  }
+  function step(from: number, dir: 1 | -1): number {
+    const n = items.length;
+    let i = from;
+    for (let k = 0; k < n; k++) {
+      i = (i + dir + n) % n;
+      if (!items[i].separator) return i;
+    }
+    return from;
+  }
 
   // Clamp the menu inside the viewport so it doesn't render off-edge when
   // the user right-clicks near the bottom or right of the window.
@@ -28,12 +43,35 @@
     const maxX = window.innerWidth - rect.width - 8;
     const maxY = window.innerHeight - rect.height - 8;
     clamped = { x: Math.min(x, Math.max(8, maxX)), y: Math.min(y, Math.max(8, maxY)) };
+    menuEl.focus();
 
     function onDocClick(e: MouseEvent) {
       if (menuEl && !menuEl.contains(e.target as Node)) onclose();
     }
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onclose();
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onclose();
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        active = step(active, 1);
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        active = step(active, -1);
+      } else if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        const it = items[active];
+        if (it && !it.separator) {
+          it.action();
+          onclose();
+        }
+      } else if (e.key === "Home") {
+        e.preventDefault();
+        active = firstSelectable(items);
+      } else if (e.key === "End") {
+        e.preventDefault();
+        active = step(items.length, -1);
+      }
     }
     document.addEventListener("mousedown", onDocClick, true);
     document.addEventListener("keydown", onKey);
@@ -50,6 +88,7 @@
   style:left={`${clamped.x}px`}
   style:top={`${clamped.y}px`}
   role="menu"
+  tabindex="-1"
 >
   {#each items as item, i (i)}
     {#if item.separator}
@@ -58,10 +97,13 @@
       <button
         class="item"
         class:danger={item.danger}
+        class:active={i === active}
+        onmouseenter={() => (active = i)}
         onclick={() => {
           item.action();
           onclose();
         }}
+        role="menuitem"
       >
         {item.label}
       </button>
@@ -93,8 +135,12 @@
     cursor: pointer;
     font: inherit;
   }
-  .item:hover {
+  .item:hover,
+  .item.active {
     background: var(--accent-soft, rgba(200, 160, 80, 0.18));
+  }
+  .sk-ctxmenu:focus {
+    outline: none;
   }
   .item.danger {
     color: oklch(0.7 0.16 25);

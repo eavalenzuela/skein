@@ -47,6 +47,24 @@
   function pct(sim: number): string {
     return `${Math.round(sim * 100)}`;
   }
+
+  function onPillKey(e: KeyboardEvent, idx: number) {
+    if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+      e.preventDefault();
+      const dir = e.key === "ArrowRight" ? 1 : -1;
+      const next = (idx + dir + hits.length) % hits.length;
+      const el = document.querySelector<HTMLButtonElement>(`[data-rel-pill="${next}"]`);
+      el?.focus();
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      document.querySelector<HTMLButtonElement>(`[data-rel-pill="0"]`)?.focus();
+    } else if (e.key === "End") {
+      e.preventDefault();
+      document
+        .querySelector<HTMLButtonElement>(`[data-rel-pill="${hits.length - 1}"]`)
+        ?.focus();
+    }
+  }
 </script>
 
 {#if hits.length > 0 || loading}
@@ -56,11 +74,13 @@
       {#if loading && hits.length === 0}
         <span class="empty">finding…</span>
       {:else}
-        {#each hits as hit (hit.rel_path)}
+        {#each hits as hit, i (hit.rel_path)}
           <button
             class="pill"
             title={hit.snippet}
             onclick={() => openTab({ rel_path: hit.rel_path, title: hit.title })}
+            onkeydown={(e) => onPillKey(e, i)}
+            data-rel-pill={i}
           >
             <span class="ttl">{hit.title}</span>
             <span class="sim">{pct(hit.similarity)}</span>

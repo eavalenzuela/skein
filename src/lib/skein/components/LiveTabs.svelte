@@ -22,9 +22,11 @@
     <div class="sk-tab {tab.rel_path === activeId ? 'active' : ''} {pinClass(tab.pin)}">
       <button
         class="bare pin"
-        title={tab.pin
-          ? `Pinned ${tab.pin}; click to switch side, right-click to unpin`
-          : "Click to pin to a side for split view"}
+        title={tab.pin === "left"
+          ? "Pinned left · click to move to right · right-click to unpin"
+          : tab.pin === "right"
+            ? "Pinned right · click to unpin · right-click to unpin"
+            : "Pin tab — click to dock for split view (cycles left → right → none)"}
         onclick={(e) => {
           e.stopPropagation();
           cyclePin(tab.rel_path);
