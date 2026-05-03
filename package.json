@@ -1,6 +1,6 @@
 {
   "name": "skein",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Skein — a local note-taking app with full-text + semantic search, auto-tagging, and an embedded Claude chat",
   "type": "module",
   "private": true,

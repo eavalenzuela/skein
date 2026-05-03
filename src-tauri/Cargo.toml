@@ -1,6 +1,6 @@
 [package]
 name = "skein"
-version = "0.0.0"
+version = "0.1.0"
 description = "Skein — a local note-taking app"
 authors = ["Skein contributors"]
 edition = "2021"
