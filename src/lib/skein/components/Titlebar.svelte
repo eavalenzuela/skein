@@ -102,9 +102,11 @@
         window.alert(
           "Skein keyboard shortcuts:\n\n" +
             "Ctrl+K — Search / command palette\n" +
+            "Ctrl+D — Today's daily note\n" +
             "Ctrl+, — Settings\n" +
             "Esc — Close modal\n" +
             "↑↓ Enter — Navigate / open in palette\n" +
+            "# in palette — Search by tag\n" +
             "Right-click — Context menu on books and pages\n" +
             "Drag book spine — Reorder shelf or open in pane",
         );
@@ -184,7 +186,7 @@
   <div class="sk-tb-right">
     <button
       class="sk-tb-btn bare"
-      title="Today's daily note"
+      title="Today's daily note (Ctrl+D)"
       onclick={jumpToToday}
       aria-label="Today's daily note"
     >

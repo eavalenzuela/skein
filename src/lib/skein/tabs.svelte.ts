@@ -4,8 +4,10 @@
 // pinned to "left" or "right" — when both pins are set, the desk shows
 // the two pages side-by-side. Otherwise the active tab fills the desk.
 //
-// Persistence: in-memory only for v1. Restored open tabs across runs is
-// a separate decision left for later.
+// Persistence: user-opened tabs (plus pins and the active tab) are saved
+// to localStorage keyed by vault root and restored on the next launch of
+// the same vault. Auto tabs are repopulated from the book context instead
+// of being persisted. Best-effort — a missing page is silently skipped.
 
 import type { Page } from "./vault.js";
 import {
@@ -44,6 +46,73 @@ export const tabsState: { tabs: Tab[]; activeId: string | null } = $state({
 
 const SAVE_DEBOUNCE_MS = 750;
 const saveTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+// --- Session persistence -------------------------------------------------
+
+const SESSION_PREFIX = "skein.tabs.";
+
+interface PersistedTab {
+  rel_path: string;
+  title: string;
+  pin: "left" | "right" | null;
+}
+interface PersistedSession {
+  tabs: PersistedTab[];
+  activeId: string | null;
+}
+
+/** Vault root the current session belongs to; null = don't persist. Set by
+ * vault.svelte.ts when a vault opens (avoids a circular store import). */
+let sessionRoot: string | null = null;
+
+function persistSession() {
+  if (!sessionRoot) return;
+  try {
+    const data: PersistedSession = {
+      tabs: tabsState.tabs
+        .filter((t) => t.kind === "user")
+        .map((t) => ({ rel_path: t.rel_path, title: t.title, pin: t.pin })),
+      activeId: tabsState.activeId,
+    };
+    localStorage.setItem(SESSION_PREFIX + sessionRoot, JSON.stringify(data));
+  } catch {
+    // Storage unavailable or full — session restore is best-effort.
+  }
+}
+
+/** Start persisting for `root` and reopen the tabs saved for it. Pages that
+ * vanished since last session are skipped without complaint. */
+export async function beginTabSession(root: string) {
+  sessionRoot = root;
+  let data: PersistedSession | null = null;
+  try {
+    data = JSON.parse(localStorage.getItem(SESSION_PREFIX + root) ?? "null");
+  } catch {
+    data = null;
+  }
+  if (!data || !Array.isArray(data.tabs)) return;
+  for (const t of data.tabs) {
+    if (!t || typeof t.rel_path !== "string") continue;
+    try {
+      await readPage(t.rel_path);
+    } catch {
+      continue; // page deleted/moved since last session
+    }
+    await openTab({ rel_path: t.rel_path, title: t.title || t.rel_path });
+    if (t.pin === "left" || t.pin === "right") togglePin(t.rel_path, t.pin);
+  }
+  const activeId = data.activeId;
+  if (activeId && tabsState.tabs.some((t) => t.rel_path === activeId)) {
+    tabsState.activeId = activeId;
+  }
+  persistSession();
+}
+
+/** Stop persisting (vault closed). The stored session stays on disk so the
+ * same vault restores its desk when reopened. */
+export function endTabSession() {
+  sessionRoot = null;
+}
 
 export function isDirty(tab: Tab): boolean {
   return tab.body !== tab.saved;
@@ -94,6 +163,7 @@ export async function openTab(
   }
   if (kind === "user") {
     await syncBookContextFromState();
+    persistSession();
   }
 }
 
@@ -163,10 +233,14 @@ export function closeTab(relPath: string) {
     tabsState.activeId = tabsState.tabs[tabsState.tabs.length - 1]?.rel_path ?? null;
   }
   void syncBookContextFromState();
+  persistSession();
 }
 
 export function setActive(relPath: string) {
-  if (findIndex(relPath) !== -1) tabsState.activeId = relPath;
+  if (findIndex(relPath) !== -1) {
+    tabsState.activeId = relPath;
+    persistSession();
+  }
 }
 
 export function togglePin(relPath: string, side: "left" | "right") {
@@ -178,6 +252,7 @@ export function togglePin(relPath: string, side: "left" | "right") {
     if (other !== tab && other.pin === side) other.pin = null;
   }
   tab.pin = tab.pin === side ? null : side;
+  persistSession();
 }
 
 /** "Smart" pin used by the pin button on each tab. If the tab is already
@@ -192,6 +267,7 @@ export function cyclePin(relPath: string) {
   if (tab.pin) {
     tab.pin = null;
     void syncBookContextFromState();
+    persistSession();
     return;
   }
   const leftTaken = tabsState.tabs.some((t) => t !== tab && t.pin === "left");
@@ -205,6 +281,7 @@ export function cyclePin(relPath: string) {
   }
   tab.pin = side;
   void syncBookContextFromState();
+  persistSession();
 }
 
 export function unpin(relPath: string) {
@@ -212,6 +289,7 @@ export function unpin(relPath: string) {
   if (i !== -1) {
     tabsState.tabs[i].pin = null;
     void syncBookContextFromState();
+    persistSession();
   }
 }
 
@@ -231,6 +309,7 @@ export function selectInPane(side: "left" | "right", relPath: string) {
     tabsState.activeId = relPath;
   }
   void syncBookContextFromState();
+  persistSession();
 }
 
 /** Open `page` (if not already open) and pin it to `side`, replacing any
@@ -250,6 +329,7 @@ export async function replaceAtPin(
     tabsState.activeId = page.rel_path;
   }
   await syncBookContextFromState();
+  persistSession();
 }
 
 export function setBody(relPath: string, body: string) {

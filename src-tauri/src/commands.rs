@@ -204,6 +204,24 @@ pub fn rename_page<R: Runtime>(
 }
 
 #[tauri::command]
+pub fn move_page<R: Runtime>(
+    app: AppHandle<R>,
+    rel_path: String,
+    book: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    let vault = state.vault().ok_or("no vault open")?;
+    let new_rel = pages::move_page(&vault, &rel_path, book.as_deref()).map_err(err)?;
+    // Drop the old row; the rebuild below re-ingests the page at its new
+    // rel_path (cheap — unchanged pages take the hash fast path).
+    if let Some(idx) = state.index.lock().as_mut() {
+        let _ = idx.delete_page(&rel_path);
+    }
+    rebuild_index_and_emit(&app, &state)?;
+    Ok(new_rel)
+}
+
+#[tauri::command]
 pub fn delete_page_command<R: Runtime>(
     app: AppHandle<R>,
     rel_path: String,
@@ -306,6 +324,20 @@ pub fn find_related(
         .ok_or_else(|| "index not initialized".to_string())?;
     let limit = limit.unwrap_or(8).min(50) as usize;
     idx.find_related(&rel_path, limit).map_err(err)
+}
+
+#[tauri::command]
+pub fn pages_with_tag(
+    tag: String,
+    limit: Option<u32>,
+    state: State<'_, AppState>,
+) -> Result<Vec<SearchHit>, String> {
+    let mut idx_slot = state.index.lock();
+    let idx = idx_slot
+        .as_mut()
+        .ok_or_else(|| "index not initialized".to_string())?;
+    let limit = limit.unwrap_or(30).min(200) as usize;
+    idx.pages_with_tag(&tag, limit).map_err(err)
 }
 
 #[tauri::command]
@@ -634,6 +666,11 @@ pub fn chat_send<R: Runtime + 'static>(
 
     let turn_id = chat::spawn_chat(app, api_key, prepared.body, prepared.context);
     Ok(turn_id)
+}
+
+#[tauri::command]
+pub fn chat_cancel(turn_id: String) {
+    chat::cancel_turn(&turn_id);
 }
 
 #[tauri::command]

@@ -22,10 +22,12 @@ pub async fn suggest_tags(
     existing_vault_tags: &[String],
 ) -> Result<Vec<String>> {
     let trimmed_body = if body.len() > 6000 {
-        // Cap to keep the prompt small. The first 6000 chars almost always
+        // Cap to keep the prompt small. The first ~6000 bytes almost always
         // capture the topic; pages longer than that can be re-summarized
-        // properly in a future polish pass.
-        let mut t = body[..6000].to_string();
+        // properly in a future polish pass. Clamp the cut to a char boundary
+        // so multi-byte text can't panic the slice.
+        let cap = crate::chunker::floor_char_boundary(body, 6000);
+        let mut t = body[..cap].to_string();
         t.push_str("\n\n[…truncated for tagging…]");
         t
     } else {

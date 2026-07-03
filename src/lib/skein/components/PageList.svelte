@@ -1,7 +1,8 @@
 <script lang="ts">
   import type { Page } from "../vault.js";
-  import { createPage, renamePage, deletePage } from "../vault.js";
+  import { createPage, renamePage, deletePage, movePage } from "../vault.js";
   import { openTab } from "../tabs.svelte.js";
+  import { vaultState } from "../vault.svelte.js";
   import ContextMenu, { type MenuItem } from "./ContextMenu.svelte";
   import { focusTrap } from "../focusTrap.js";
 
@@ -85,12 +86,39 @@
     }
   }
 
+  // Move to another book / Folio
+  let moveError = $state<string | null>(null);
+
+  async function doMove(p: Page, destBook: string | null) {
+    moveError = null;
+    try {
+      await movePage(p.rel_path, destBook);
+    } catch (e) {
+      moveError = String(e);
+    }
+  }
+
+  /** Destinations other than where the page already lives: the Folio plus
+   * every other book on the shelf. */
+  function moveTargets(p: Page): MenuItem[] {
+    const items: MenuItem[] = [];
+    if (book !== null) {
+      items.push({ label: "Move to Folio", action: () => void doMove(p, null) });
+    }
+    for (const b of vaultState.books) {
+      if (b.name === book) continue;
+      items.push({ label: `Move to ${b.name}`, action: () => void doMove(p, b.name) });
+    }
+    return items;
+  }
+
   // Context menu
   let menu = $state<{ x: number; y: number; items: MenuItem[] } | null>(null);
 
   function openRowMenu(ev: MouseEvent, p: Page) {
     ev.preventDefault();
     ev.stopPropagation();
+    const targets = moveTargets(p);
     menu = {
       x: ev.clientX,
       y: ev.clientY,
@@ -106,6 +134,10 @@
             renameError = null;
           },
         },
+        ...(targets.length > 0
+          ? [{ separator: true, label: "", action: () => {} }, ...targets]
+          : []),
+        { separator: true, label: "", action: () => {} },
         {
           label: "Delete…",
           danger: true,
@@ -154,6 +186,13 @@
       >
     </div>
   </div>
+
+  {#if moveError}
+    <p class="err" role="alert">
+      Move failed: {moveError}
+      <button class="dismiss" onclick={() => (moveError = null)}>dismiss</button>
+    </p>
+  {/if}
 
   {#if creating}
     <div class="create-row">
@@ -338,6 +377,17 @@
     margin-top: 4px;
     font-size: 11px;
     color: oklch(0.7 0.16 25);
+  }
+  .dismiss {
+    display: inline;
+    width: auto;
+    border: 0;
+    padding: 0 0 0 6px;
+    background: transparent;
+    color: var(--ink-3);
+    font-size: 11px;
+    text-decoration: underline;
+    cursor: pointer;
   }
   ul {
     list-style: none;

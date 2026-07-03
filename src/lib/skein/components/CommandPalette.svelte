@@ -1,6 +1,7 @@
 <script lang="ts">
   import {
     searchPages,
+    pagesWithTag,
     type SearchHit,
     openTodayDaily,
     rebuildIndex,
@@ -12,6 +13,7 @@
   import { close as closeVaultStore, vaultState } from "../vault.svelte.js";
   import { downloadModel } from "../embedder.svelte.js";
   import { focusTrap } from "../focusTrap.js";
+  import { sanitizeSnippet } from "../sanitize.js";
 
   interface Command {
     id: string;
@@ -95,6 +97,7 @@
   let inputEl: HTMLInputElement | undefined = $state();
 
   let isCommandMode = $derived(query.startsWith(":"));
+  let isTagMode = $derived(query.startsWith("#"));
   let resultCount = $derived(isCommandMode ? cmdHits.length : hits.length);
 
   $effect(() => {
@@ -128,7 +131,11 @@
     const myToken = ++pending;
     loading = true;
     try {
-      const result = await searchPages(q, 30);
+      // `#` prefix flips to tag search: pages whose tags start with the
+      // rest of the query. Plain queries stay full-text.
+      const result = q.startsWith("#")
+        ? await pagesWithTag(q.slice(1), 30)
+        : await searchPages(q, 30);
       if (myToken !== pending) return;
       hits = result;
       cmdHits = [];
@@ -207,7 +214,7 @@
       bind:this={inputEl}
       bind:value={query}
       type="text"
-      placeholder="Search pages — start with : for commands"
+      placeholder="Search pages — : for commands, # for tags"
       onkeydown={onKeydown}
       autocomplete="off"
       spellcheck="false"
@@ -222,10 +229,12 @@
               ? `${cmdHits.length} command${cmdHits.length === 1 ? "" : "s"}`
               : "no matching commands"
             : hits.length
-              ? `${hits.length} match${hits.length === 1 ? "" : "es"}`
+              ? `${hits.length} ${isTagMode ? "tagged page" : "match"}${hits.length === 1 ? "" : isTagMode ? "s" : "es"}`
               : query.trim()
-                ? "no matches"
-                : "type to search · : for commands"}</span
+                ? isTagMode
+                  ? "no pages with that tag"
+                  : "no matches"
+                : "type to search · : commands · # tags"}</span
       >
       <span class="kbd">↑↓ navigate · ⏎ open · esc close</span>
     </div>
@@ -258,9 +267,10 @@
           >
             <div class="ttl">{hit.title}</div>
             <div class="rp">{hit.book ?? "Folio"} · {hit.rel_path}</div>
-            <!-- snippet contains <mark> tags from FTS5 -->
+            <!-- snippet contains <mark> tags from FTS5; everything else is
+                 escaped so markup inside note content can't execute -->
             <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-            <div class="snip">{@html hit.snippet}</div>
+            <div class="snip">{@html sanitizeSnippet(hit.snippet)}</div>
           </li>
         {/each}
       {/if}

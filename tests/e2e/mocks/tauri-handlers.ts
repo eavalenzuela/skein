@@ -260,6 +260,25 @@ export function installMock(cfg: MockConfig): void {
       emit("vault-changed", null);
       return newRel;
     },
+    move_page: ({ relPath, book }): string => {
+      const r = String(relPath);
+      const b = book == null ? null : String(book);
+      const p = state.pages.get(r);
+      if (!p) throw new Error("not found");
+      const stem = r.split("/").pop()!;
+      const newRel = b ? `${b}/${stem}` : stem;
+      if (newRel === r) return r;
+      const oldBook = state.books.find((bb) => bb.name === p.book);
+      if (oldBook) oldBook.page_count = Math.max(0, oldBook.page_count - 1);
+      state.pages.delete(r);
+      p.rel_path = newRel;
+      p.book = b;
+      state.pages.set(newRel, p);
+      const newBook = state.books.find((bb) => bb.name === b);
+      if (newBook) newBook.page_count += 1;
+      emit("vault-changed", null);
+      return newRel;
+    },
     delete_page_command: ({ relPath }) => {
       const r = String(relPath);
       const p = state.pages.get(r);
@@ -294,6 +313,17 @@ export function installMock(cfg: MockConfig): void {
           title: p.title,
           book: p.book,
           snippet: p.title,
+        }));
+    },
+    pages_with_tag: ({ tag }): SearchHit[] => {
+      const q = String(tag).replace(/^#/, "").toLowerCase();
+      return [...state.pages.values()]
+        .filter((p) => p.tags.some((t) => t.toLowerCase().startsWith(q)))
+        .map((p) => ({
+          rel_path: p.rel_path,
+          title: p.title,
+          book: p.book,
+          snippet: "#" + p.tags.join(" #"),
         }));
     },
     find_related: (): RelatedHit[] => [],
@@ -366,6 +396,7 @@ export function installMock(cfg: MockConfig): void {
       setTimeout(() => emit(`chat-turn-${id}`, { kind: "done", text: "Mock response" }), 50);
       return id;
     },
+    chat_cancel: () => undefined,
 
     "plugin:event|listen": ({ event, handler }): number => {
       const id = state.nextEventId++;
@@ -401,7 +432,6 @@ export function installMock(cfg: MockConfig): void {
     invoke: async (cmd, args) => {
       const h = handlers[cmd];
       if (!h) {
-        // eslint-disable-next-line no-console
         console.warn("[tauri-mock] unhandled command:", cmd, args);
         throw new Error(`Mock: command "${cmd}" not implemented`);
       }

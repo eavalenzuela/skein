@@ -31,6 +31,15 @@ fn handle_paths(vault: &Vault, index: &Mutex<Option<Index>>, paths: &[PathBuf]) 
         } else if let Some(rel) = rel_path_of(vault, path) {
             // File no longer exists at this path — remove from the index.
             let _ = idx.delete_page(&rel);
+            // A vanished directory (book folder deleted or renamed outside
+            // the app) only reports the folder path, but takes every page
+            // beneath it. Anything without a markdown extension might have
+            // been a folder, so sweep the prefix too — for a plain file the
+            // pattern matches nothing and the sweep is a no-op.
+            let lower = rel.to_lowercase();
+            if !lower.ends_with(".md") && !lower.ends_with(".markdown") {
+                let _ = idx.delete_pages_with_prefix(&format!("{}/", rel));
+            }
         }
     }
 }

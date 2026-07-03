@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use rusqlite::{params, Connection, OpenFlags};
+use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
@@ -157,6 +157,32 @@ impl Index {
         let mut hasher = Sha256::new();
         hasher.update(data.body.as_bytes());
         let hash: Vec<u8> = hasher.finalize().to_vec();
+
+        // Fast path: identical body already indexed and embedded under the
+        // current model — just refresh the modified stamp. Rename/delete
+        // flows rebuild the whole vault through here, so this early-out is
+        // what keeps them from re-chunking and re-embedding every page.
+        // Title, book, tags and links all derive from the body or the
+        // rel_path, both of which are unchanged when the hash matches.
+        let model_name = self.embedder.name().to_string();
+        let unchanged: Option<i64> = self
+            .conn
+            .query_row(
+                "SELECT 1 FROM pages p
+                 WHERE p.rel_path = ?1 AND p.hash = ?2
+                   AND EXISTS (SELECT 1 FROM embeddings e
+                               WHERE e.rel_path = p.rel_path AND e.model = ?3)",
+                params![data.rel_path, hash, model_name],
+                |r| r.get(0),
+            )
+            .optional()?;
+        if unchanged.is_some() {
+            self.conn.execute(
+                "UPDATE pages SET modified = ?2 WHERE rel_path = ?1",
+                params![data.rel_path, data.modified],
+            )?;
+            return Ok(());
+        }
 
         let tx = self.conn.transaction()?;
         tx.execute(
@@ -321,6 +347,45 @@ impl Index {
             params![pattern],
         )?;
         Ok(())
+    }
+
+    /// Pages carrying a tag that starts with `tag_query` (case-insensitive;
+    /// a leading `#` and surrounding whitespace are ignored). An empty query
+    /// lists every tagged page. The snippet shows the page's matching tags
+    /// so the palette can render results with the same shape as FTS hits.
+    pub fn pages_with_tag(&self, tag_query: &str, limit: usize) -> Result<Vec<SearchHit>> {
+        let needle = tag_query.trim().trim_start_matches('#').to_lowercase();
+        // Escape LIKE wildcards so a literal `%`/`_` in a tag can't widen
+        // the match.
+        let escaped = needle
+            .replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_");
+        let pattern = format!("{}%", escaped);
+        let mut stmt = self.conn.prepare(
+            "SELECT p.rel_path, p.title, p.book,
+                    GROUP_CONCAT(t.tag, ', ') AS matched
+             FROM tags t
+             JOIN pages p ON p.rel_path = t.rel_path
+             WHERE lower(t.tag) LIKE ?1 ESCAPE '\\'
+             GROUP BY p.rel_path
+             ORDER BY p.title COLLATE NOCASE
+             LIMIT ?2",
+        )?;
+        let rows = stmt.query_map(params![pattern, limit as i64], |row| {
+            let tags: Option<String> = row.get(3)?;
+            Ok(SearchHit {
+                rel_path: row.get(0)?,
+                title: row.get(1)?,
+                book: row.get(2)?,
+                snippet: format!("#{}", tags.unwrap_or_default().replace(", ", " #")),
+            })
+        })?;
+        let mut out = Vec::new();
+        for r in rows {
+            out.push(r?);
+        }
+        Ok(out)
     }
 
     pub fn all_tags(&self) -> Result<Vec<String>> {

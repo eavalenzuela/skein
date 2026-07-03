@@ -16,6 +16,7 @@
   } from "./tabs.svelte.js";
   import { searchUi, openSearch, closeSearch } from "./searchUi.svelte.js";
   import { settingsUi, openSettings, closeSettings } from "./settingsUi.svelte.js";
+  import { openTodayDaily } from "./vault.js";
   import Titlebar from "./components/Titlebar.svelte";
   import VaultBookshelf from "./components/VaultBookshelf.svelte";
   import LiveTabs from "./components/LiveTabs.svelte";
@@ -41,6 +42,20 @@
       e.preventDefault();
       if (settingsUi.open) closeSettings();
       else openSettings();
+    } else if ((e.ctrlKey || e.metaKey) && (e.key === "d" || e.key === "D")) {
+      e.preventDefault();
+      void jumpToDaily();
+    }
+  }
+
+  async function jumpToDaily() {
+    try {
+      const res = await openTodayDaily();
+      const stem = res.rel_path.split("/").pop()?.replace(/\.md$/, "") ?? res.rel_path;
+      await openTab({ rel_path: res.rel_path, title: stem });
+    } catch {
+      // No vault open or write failed — same silent policy as the
+      // titlebar's daily-note button.
     }
   }
 

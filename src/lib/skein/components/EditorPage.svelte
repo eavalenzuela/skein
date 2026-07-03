@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Tab } from "../tabs.svelte.js";
   import { setBody } from "../tabs.svelte.js";
+  import { docStats } from "../wordCount.js";
   import Editor from "../editor/Editor.svelte";
   import TagChips from "./TagChips.svelte";
 
@@ -8,6 +9,8 @@
     tab: Tab;
   }
   let { tab }: Props = $props();
+
+  let stats = $derived(docStats(tab.body));
 
   let dropping = $state(false);
   let dragDepth = 0;
@@ -48,6 +51,12 @@
       relPath={tab.rel_path}
       onChange={(next) => setBody(tab.rel_path, next)}
     />
+    <div class="doc-stats" aria-label="Document statistics">
+      {stats.words}
+      {stats.words === 1 ? "word" : "words"} · {stats.chars} chars{stats.minutes > 0
+        ? ` · ~${stats.minutes} min`
+        : ""}
+    </div>
   {/if}
   {#if dropping}
     <div class="drop-hint" aria-hidden="true">Drop to insert into the page</div>
@@ -66,6 +75,18 @@
     color: var(--ink-3);
     font-family: "Inter", sans-serif;
     font-size: 12px;
+  }
+  .doc-stats {
+    flex: 0 0 auto;
+    padding: 3px 14px 5px;
+    text-align: right;
+    color: var(--ink-4);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    letter-spacing: 0.03em;
+    border-top: 1px solid var(--page-edge);
+    background: var(--page);
+    user-select: none;
   }
   .sk-page.dropping {
     box-shadow: inset 0 0 0 2px var(--accent);

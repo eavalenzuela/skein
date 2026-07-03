@@ -28,7 +28,7 @@ export const CHAT_MODELS: ChatModel[] = [
 
 interface ChatEventPayload {
   turn_id: string;
-  kind: "started" | "token" | "done" | "error";
+  kind: "started" | "token" | "done" | "cancelled" | "error";
   text?: string;
   error?: string;
   context?: {
@@ -65,6 +65,11 @@ export async function attachChatBus() {
     if (!last || last.role !== "assistant") return;
     if (p.kind === "token" && p.text) {
       last.content += p.text;
+    } else if (p.kind === "cancelled") {
+      last.streaming = false;
+      if (last.content === "") last.content = "(stopped)";
+      chatState.busy = false;
+      chatState.activeTurnId = null;
     } else if (p.kind === "done") {
       last.streaming = false;
       if (p.context) {
@@ -127,6 +132,19 @@ export async function send(input: string, currentRelPath: string | null) {
     assistantMsg.streaming = false;
     chatState.busy = false;
     chatState.error = String(e);
+  }
+}
+
+/** Ask the backend to stop the in-flight turn. Whatever streamed so far
+ * stays in the transcript; the backend confirms with a "cancelled" event. */
+export async function cancelActive() {
+  const id = chatState.activeTurnId;
+  if (!id) return;
+  try {
+    await invoke("chat_cancel", { turnId: id });
+  } catch {
+    // Backend refused (turn already finished) — the done/error event will
+    // clear the busy state on its own.
   }
 }
 

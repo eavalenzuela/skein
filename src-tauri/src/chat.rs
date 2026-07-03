@@ -6,6 +6,8 @@
 // Anthropic API with stream=true, parse SSE, and emit per-token events back
 // to the frontend on the "chat-event" channel.
 
+use std::collections::HashSet;
+use std::sync::OnceLock;
 use std::time::Duration;
 
 use anyhow::{anyhow, Context, Result};
@@ -27,11 +29,27 @@ pub struct ChatMessageIn {
 #[derive(Debug, Clone, Serialize)]
 pub struct ChatEvent {
     pub turn_id: String,
-    pub kind: String, // "started" | "token" | "done" | "error"
+    pub kind: String, // "started" | "token" | "done" | "cancelled" | "error"
     pub text: Option<String>,
     pub error: Option<String>,
     /// For "done" — describe the context that was sent so the UI can show it.
     pub context: Option<ChatContextInfo>,
+}
+
+/// Turn ids the user asked to stop. Checked between stream chunks; a turn
+/// that finishes naturally cleans its own entry so the set stays small.
+fn cancelled_turns() -> &'static Mutex<HashSet<String>> {
+    static CANCELLED: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+    CANCELLED.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+pub fn cancel_turn(turn_id: &str) {
+    cancelled_turns().lock().insert(turn_id.to_string());
+}
+
+/// Remove-and-report so a stale cancel can't kill a future turn.
+fn take_cancelled(turn_id: &str) -> bool {
+    cancelled_turns().lock().remove(turn_id)
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -238,6 +256,19 @@ async fn run_chat_inner<R: Runtime>(
     let mut buffer = String::new();
 
     while let Some(chunk) = stream.next().await {
+        if take_cancelled(turn_id) {
+            let _ = app.emit(
+                "chat-event",
+                ChatEvent {
+                    turn_id: turn_id.to_string(),
+                    kind: "cancelled".into(),
+                    text: None,
+                    error: None,
+                    context: Some(context.clone()),
+                },
+            );
+            return Ok(());
+        }
         let chunk = chunk?;
         buffer.push_str(&String::from_utf8_lossy(&chunk));
         // Each SSE event ends with a blank line.
@@ -255,6 +286,20 @@ async fn run_chat_inner<R: Runtime>(
                     }
                     data.push_str(rest);
                 }
+            }
+            if event_type == "error" {
+                // Mid-stream failure (e.g. overloaded_error). Surface it —
+                // silently dropping it leaves the bubble hanging forever.
+                let msg = serde_json::from_str::<Value>(&data)
+                    .ok()
+                    .and_then(|v| {
+                        v.get("error")
+                            .and_then(|e| e.get("message"))
+                            .and_then(|m| m.as_str())
+                            .map(|s| s.to_string())
+                    })
+                    .unwrap_or_else(|| data.clone());
+                return Err(anyhow!("anthropic stream error: {}", msg));
             }
             if event_type == "content_block_delta" {
                 if let Ok(v) = serde_json::from_str::<Value>(&data) {
@@ -278,6 +323,9 @@ async fn run_chat_inner<R: Runtime>(
             }
         }
     }
+
+    // Drop any cancel request that raced the natural end of the stream.
+    let _ = take_cancelled(turn_id);
 
     let _ = app.emit(
         "chat-event",

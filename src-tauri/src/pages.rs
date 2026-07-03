@@ -69,6 +69,49 @@ pub fn rename_page(vault: &Vault, old_rel: &str, new_title: &str) -> Result<Stri
     rel_string(&vault.root, &new_full)
 }
 
+/// Move a page into another book (or to the vault root when `dest_book` is
+/// None). The file stem is preserved — wikilinks resolve by stem, so links
+/// keep working — unless the destination already has a page with that stem,
+/// in which case the usual " (N)" suffix applies and links are rewritten.
+pub fn move_page(vault: &Vault, rel: &str, dest_book: Option<&str>) -> Result<String> {
+    let old_full = vault.root.join(rel);
+    if !old_full.is_file() {
+        return Err(anyhow!("page not found: {rel}"));
+    }
+    let dest_dir = match dest_book {
+        Some(b) => vault.root.join(b),
+        None => vault.root.clone(),
+    };
+    if !dest_dir.is_dir() {
+        return Err(anyhow!("destination folder not found"));
+    }
+    let canonical_dir = dest_dir.canonicalize()?;
+    if !canonical_dir.starts_with(&vault.root) {
+        return Err(anyhow!("path escapes vault root"));
+    }
+    let stem = old_full
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .ok_or_else(|| anyhow!("page filename is not utf-8"))?
+        .to_string();
+    // Already there? Nothing to do.
+    if old_full
+        .parent()
+        .and_then(|p| p.canonicalize().ok())
+        .is_some_and(|p| p == canonical_dir)
+    {
+        return Ok(rel.to_string());
+    }
+    let final_stem = unique_stem(&canonical_dir, &stem);
+    let target = canonical_dir.join(format!("{final_stem}.md"));
+    fs::rename(&old_full, &target)
+        .with_context(|| format!("moving {} → {}", old_full.display(), target.display()))?;
+    if final_stem != stem {
+        rewrite_wikilinks(vault, &stem, &final_stem)?;
+    }
+    rel_string(&vault.root, &target)
+}
+
 pub fn delete_page(vault: &Vault, rel: &str) -> Result<()> {
     let full = vault.root.join(rel);
     if !full.is_file() {

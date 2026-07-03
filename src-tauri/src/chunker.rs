@@ -33,7 +33,10 @@ pub fn chunk_markdown(body: &str) -> Vec<Chunk> {
             if current_text.len() >= SOFT_CAP_CHARS {
                 // Try to break at the last blank line for readability; fall
                 // back to the soft cap if there's no blank line in range.
-                if let Some(cut) = current_text[..SOFT_CAP_CHARS].rfind("\n\n") {
+                // The cap is a byte offset, so clamp it to a char boundary —
+                // slicing mid-character panics on non-ASCII text.
+                let cap = floor_char_boundary(&current_text, SOFT_CAP_CHARS);
+                if let Some(cut) = current_text[..cap].rfind("\n\n") {
                     let head: String = current_text[..cut + 1].to_string();
                     let tail: String = current_text[cut + 2..].to_string();
                     push_chunk(&mut chunks, &mut idx, &current_heading, head);
@@ -65,17 +68,33 @@ fn strip_atx(line: &str) -> Option<&str> {
 }
 
 fn strip_frontmatter(body: &str) -> &str {
-    if !body.starts_with("---\n") {
+    // Accept both LF and CRLF delimiters — vaults edited on Windows carry
+    // `\r\n` and the YAML block would otherwise leak into the first chunk.
+    let after_open = if let Some(rest) = body.strip_prefix("---\r\n") {
+        rest
+    } else if let Some(rest) = body.strip_prefix("---\n") {
+        rest
+    } else {
         return body;
-    }
-    let after_open = &body[4..];
-    if let Some(end_rel) = after_open.find("\n---\n") {
-        return &after_open[end_rel + 5..];
-    }
-    if let Some(end_rel) = after_open.find("\n---") {
-        return &after_open[end_rel + 4..];
+    };
+    for marker in ["\n---\r\n", "\n---\n", "\n---"] {
+        if let Some(end_rel) = after_open.find(marker) {
+            return &after_open[end_rel + marker.len()..];
+        }
     }
     body
+}
+
+/// Largest byte index `<= i` that lands on a char boundary of `s`. Stable
+/// stand-in for the unstable `str::floor_char_boundary`.
+pub fn floor_char_boundary(s: &str, mut i: usize) -> usize {
+    if i >= s.len() {
+        return s.len();
+    }
+    while !s.is_char_boundary(i) {
+        i -= 1;
+    }
+    i
 }
 
 fn push_chunk(chunks: &mut Vec<Chunk>, idx: &mut u32, heading: &str, text: String) {
@@ -117,5 +136,36 @@ mod tests {
         let chunks = chunk_markdown(md);
         assert_eq!(chunks.len(), 1);
         assert_eq!(chunks[0].heading, "Hello");
+    }
+
+    #[test]
+    fn strips_crlf_frontmatter() {
+        let md = "---\r\ntitle: x\r\n---\r\n\r\n# Hello\r\nbody";
+        let chunks = chunk_markdown(md);
+        assert_eq!(chunks.len(), 1);
+        assert_eq!(chunks[0].heading, "Hello");
+        assert!(!chunks[0].text.contains("title:"));
+    }
+
+    #[test]
+    fn soft_cap_split_survives_multibyte_text() {
+        // A single long paragraph of multi-byte characters with no blank
+        // lines — the soft-cap slice must not land mid-character.
+        let line = "ü".repeat(300); // 600 bytes per line
+        let md = format!("{line}\n{line}\n{line}\n{line}\n");
+        let chunks = chunk_markdown(&md);
+        assert!(!chunks.is_empty());
+        // Nothing lost: total content chars survive the re-chunking.
+        let total: usize = chunks.iter().map(|c| c.text.chars().count()).sum();
+        assert!(total >= 1200);
+    }
+
+    #[test]
+    fn floor_char_boundary_clamps() {
+        let s = "aü"; // 'ü' spans bytes 1..3
+        assert_eq!(floor_char_boundary(s, 0), 0);
+        assert_eq!(floor_char_boundary(s, 2), 1);
+        assert_eq!(floor_char_boundary(s, 3), 3);
+        assert_eq!(floor_char_boundary(s, 99), 3);
     }
 }

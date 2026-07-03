@@ -47,8 +47,11 @@ pub fn export_vault(vault_root: &Path, index_db: &Path, dest_zip: &Path) -> Resu
 
     let mut buf = Vec::with_capacity(64 * 1024);
     for entry in WalkDir::new(&canonical_root).into_iter().filter_entry(|e| {
-        // Skip the reserved `.skein/` directory at the vault root.
-        if e.depth() == 1 && e.file_name() == ".skein" {
+        // Skip the reserved `.skein/` directory at the vault root, and the
+        // `.git/` folder a git-synced vault carries — exporting the entire
+        // repository history would bloat the archive for no benefit (the
+        // restore path rebuilds a fresh vault, not a clone).
+        if e.depth() == 1 && (e.file_name() == ".skein" || e.file_name() == ".git") {
             return false;
         }
         true

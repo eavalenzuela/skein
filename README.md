@@ -6,7 +6,14 @@ The visual metaphor is a study: a bookshelf of "books" (folders of pages) above 
 
 ## Status
 
-Phase 0 — bootstrap. See [`design.md`](./design.md) for the full design and phased implementation plan.
+**v0.1.0** — the full v1 phase plan from [`design.md`](./design.md) has landed:
+
+- Markdown vault on disk (books = folders, pages = `.md` files) with a disposable SQLite index, live file watcher, and YAML frontmatter.
+- CodeMirror 6 editor with Obsidian-style live preview, split view via pinned tabs, dirty indicators, and session restore of open tabs.
+- Full-text search (FTS5) and semantic related-notes (local BGE-small ONNX embeddings, hash-bag fallback, content-hash vector cache); command palette with `:` commands and `#` tag search.
+- `[[wikilinks]]` with autocomplete, backlinks panel, and rename-safe link rewriting.
+- Claude chat sidebar with RAG context modes, streaming, stop-generation, and drag-to-insert into the editor; auto-tag suggestions via Haiku.
+- Daily notes with templates and OS reminders, paste/drop image attachments, zip export/restore with an embeddings sidecar, and optional git sync (libgit2).
 
 ## Stack
 
@@ -35,6 +42,7 @@ npm run tauri dev
 ├── design/mockups/          # design handoff bundle (visual reference)
 ├── src/                     # SvelteKit frontend
 ├── src-tauri/               # Tauri / Rust backend
+├── tests/                   # Vitest unit + Playwright e2e suites
 └── .github/workflows/       # CI
 ```
 
@@ -45,6 +53,10 @@ npm run tauri dev
 - `npm run check` — type-check the Svelte/TS code.
 - `npm run lint` — ESLint.
 - `npm run format` — Prettier.
+- `npm run test:unit` — Vitest unit tests.
+- `npm run test:e2e` — Playwright e2e suite against a typed Tauri mock (includes visual regression; refresh snapshots with `npx playwright test --update-snapshots` after intentional UI changes).
+- `npm run test:rust` — Rust unit + integration tests.
+- `npm run smoke` — the full pre-push gate (type-check → lint → unit → Rust → e2e → debug Tauri build); `npm run smoke:fast` skips the Tauri build.
 
 ## License
 

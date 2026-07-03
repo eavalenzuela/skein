@@ -1,7 +1,14 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import type { SidebarMode } from "../tweaks.svelte.js";
-  import { chatState, send, attachChatBus, CHAT_MODELS, type ContextMode } from "../chat.svelte.js";
+  import {
+    chatState,
+    send,
+    cancelActive,
+    attachChatBus,
+    CHAT_MODELS,
+    type ContextMode,
+  } from "../chat.svelte.js";
   import { activeTab } from "../tabs.svelte.js";
   import { hasSecret, getSettings, setSettings } from "../settings.js";
   import { openSettings } from "../settingsUi.svelte.js";
@@ -332,12 +339,25 @@
             disabled={chatState.busy}>@ Mention</button
           >
         </div>
-        <button class="send" onclick={onSubmit} disabled={chatState.busy || !input.trim()}>
-          <svg width="11" height="11" viewBox="0 0 14 14" fill="currentColor">
-            <path d="M2 2l10 5-10 5 2-5z" />
-          </svg>
-          {chatState.busy ? "…" : "Send"}
-        </button>
+        {#if chatState.busy}
+          <button
+            class="send stop"
+            onclick={() => void cancelActive()}
+            title="Stop generating"
+          >
+            <svg width="11" height="11" viewBox="0 0 14 14" fill="currentColor">
+              <rect x="3" y="3" width="8" height="8" rx="1" />
+            </svg>
+            Stop
+          </button>
+        {:else}
+          <button class="send" onclick={onSubmit} disabled={!input.trim()}>
+            <svg width="11" height="11" viewBox="0 0 14 14" fill="currentColor">
+              <path d="M2 2l10 5-10 5 2-5z" />
+            </svg>
+            Send
+          </button>
+        {/if}
       </div>
     </div>
   </div>
@@ -372,6 +392,14 @@
   }
   .sk-pill.bare:hover {
     background: oklch(from var(--chrome-2) calc(l + 0.05) c h);
+  }
+  .send.stop {
+    background: oklch(0.45 0.16 25);
+    border-color: oklch(0.55 0.16 25);
+    color: oklch(0.96 0.02 60);
+  }
+  .send.stop:hover {
+    filter: brightness(1.12);
   }
   .key-hint {
     flex: 1;

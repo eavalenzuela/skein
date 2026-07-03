@@ -45,6 +45,10 @@ export const renamePage = (relPath: string, newTitle: string) =>
   invoke<string>("rename_page", { relPath, newTitle });
 export const deletePage = (relPath: string) =>
   invoke<void>("delete_page_command", { relPath });
+/** Move a page into `book`, or to the vault root (Folio) when `book` is null.
+ * Returns the new rel_path. */
+export const movePage = (relPath: string, book: string | null) =>
+  invoke<string>("move_page", { relPath, book });
 export const listLoosePages = () => invoke<Page[]>("list_loose_pages");
 export const listPagesInBook = (book: string) => invoke<Page[]>("list_pages_in_book", { book });
 export const readPage = (relPath: string) => invoke<string>("read_page", { relPath });
@@ -60,6 +64,11 @@ export interface SearchHit {
 
 export const searchPages = (query: string, limit?: number) =>
   invoke<SearchHit[]>("search_pages", { query, limit });
+
+/** Pages whose tags start with `tag` (leading `#` ignored; empty lists all
+ * tagged pages). The snippet field carries the matched tag list. */
+export const pagesWithTag = (tag: string, limit?: number) =>
+  invoke<SearchHit[]>("pages_with_tag", { tag, limit });
 
 export interface RelatedHit {
   rel_path: string;
