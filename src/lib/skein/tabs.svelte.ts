@@ -16,6 +16,7 @@ import {
   listLoosePages,
   listPagesInBook,
 } from "./vault.js";
+import { toastError } from "./toasts.svelte.js";
 
 /** "user" — opened explicitly (click, drag, search hit). Sticky.
  *  "auto" — loaded as a sibling for navigation when its book became the
@@ -30,6 +31,12 @@ export interface Tab {
   pin: "left" | "right" | null;
   loading: boolean;
   kind: TabKind;
+  /** Set when the page could not be read. The tab renders read-only and
+   * refuses to save — otherwise the buffer we never filled would be
+   * written back over a file that is merely temporarily unreadable. */
+  loadError?: string;
+  /** Set when the last save attempt failed, so the tab can show it. */
+  saveError?: string;
 }
 
 /** Infer the book name from a vault-relative page path. Loose pages return
@@ -115,7 +122,35 @@ export function endTabSession() {
 }
 
 export function isDirty(tab: Tab): boolean {
+  // A tab that never loaded has nothing worth persisting, whatever its
+  // buffer says.
+  if (tab.loadError) return false;
   return tab.body !== tab.saved;
+}
+
+/** True when the tab holds real file content and may be written back. */
+export function isWritable(tab: Tab): boolean {
+  return !tab.loadError && !tab.loading;
+}
+
+/** Re-read a tab from disk. Used by the "try again" button on a tab whose
+ * first read failed; discards nothing, since a failed tab has no content. */
+export async function reloadTab(relPath: string) {
+  const i = findIndex(relPath);
+  if (i === -1) return;
+  const tab = tabsState.tabs[i];
+  tab.loading = true;
+  try {
+    const body = await readPage(relPath);
+    tab.body = body;
+    tab.saved = body;
+    tab.loadError = undefined;
+  } catch (e) {
+    tab.loadError = String(e);
+    toastError(`Still can't open ${tab.title}`, String(e));
+  } finally {
+    tab.loading = false;
+  }
 }
 
 function findIndex(relPath: string): number {
@@ -156,9 +191,15 @@ export async function openTab(
     } catch (e) {
       const i = findIndex(page.rel_path);
       if (i !== -1) {
-        tabsState.tabs[i].loading = false;
-        tabsState.tabs[i].body = `# Error\n\n${String(e)}`;
+        const t = tabsState.tabs[i];
+        t.loading = false;
+        // Diagnostic text goes in its own field, never into `body` — the
+        // body is what autosave writes to disk.
+        t.loadError = String(e);
+        t.body = "";
+        t.saved = "";
       }
+      toastError(`Couldn't open ${page.title}`, String(e));
     }
   }
   if (kind === "user") {
@@ -223,10 +264,20 @@ export function closeTab(relPath: string) {
     clearTimeout(t);
     saveTimers.delete(relPath);
   }
-  // Best-effort flush: if dirty, kick off an immediate save.
+  // Best-effort flush: if dirty, kick off an immediate save. A tab whose
+  // read failed is never dirty, so it can't be flushed over the real file.
   const tab = tabsState.tabs.find((tt) => tt.rel_path === relPath);
-  if (tab && isDirty(tab)) {
-    void writePage(relPath, tab.body).catch(() => {});
+  if (tab && isDirty(tab) && isWritable(tab)) {
+    const body = tab.body;
+    const title = tab.title;
+    void writePage(relPath, body).catch((e) => {
+      // The tab is already gone from the UI, so the toast is the only
+      // chance the user gets to hear that their edits didn't land.
+      toastError(`Couldn't save ${title}`, String(e), {
+        label: "Retry",
+        run: () => writePage(relPath, body).catch(() => {}),
+      });
+    });
   }
   tabsState.tabs = tabsState.tabs.filter((tt) => tt.rel_path !== relPath);
   if (tabsState.activeId === relPath) {
@@ -335,6 +386,7 @@ export async function replaceAtPin(
 export function setBody(relPath: string, body: string) {
   const i = findIndex(relPath);
   if (i === -1) return;
+  if (!isWritable(tabsState.tabs[i])) return;
   tabsState.tabs[i].body = body;
   scheduleSave(relPath);
 }
@@ -347,12 +399,17 @@ function scheduleSave(relPath: string) {
     const i = findIndex(relPath);
     if (i === -1) return;
     const tab = tabsState.tabs[i];
-    if (!isDirty(tab)) return;
+    if (!isDirty(tab) || !isWritable(tab)) return;
     try {
       await writePage(relPath, tab.body);
       tab.saved = tab.body;
-    } catch {
-      // leave dirty; user will see the indicator
+      tab.saveError = undefined;
+    } catch (e) {
+      // Stay dirty so the next keystroke retries, but say so — a silently
+      // failing autosave is indistinguishable from a working one.
+      const first = !tab.saveError;
+      tab.saveError = String(e);
+      if (first) toastError(`Couldn't save ${tab.title}`, String(e));
     }
   }, SAVE_DEBOUNCE_MS);
   saveTimers.set(relPath, timer);

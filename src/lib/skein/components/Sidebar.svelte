@@ -14,6 +14,7 @@
   import { openSettings } from "../settingsUi.svelte.js";
   import { titlesState } from "../titles.svelte.js";
   import ChatMessages from "./ChatMessages.svelte";
+  import ContextMenu from "./ContextMenu.svelte";
 
   interface Props {
     mode: SidebarMode;
@@ -199,23 +200,44 @@
     return CHAT_MODELS.find((m) => m.id === id)?.label ?? id;
   }
 
-  function cycleModel() {
-    const idx = CHAT_MODELS.findIndex((m) => m.id === chatState.model);
-    chatState.model = CHAT_MODELS[(idx + 1) % CHAT_MODELS.length].id;
-    void persistChatPrefs();
+  // Both pills carry a chevron, so they must actually open a menu. They
+  // used to advance to the next value on click — a user clicking to see
+  // the options instead silently changed them, possibly onto Opus.
+  let modelMenu = $state<{ x: number; y: number } | null>(null);
+  let contextMenu = $state<{ x: number; y: number } | null>(null);
+
+  function anchorOf(e: MouseEvent): { x: number; y: number } {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    return { x: rect.left, y: rect.bottom + 3 };
   }
 
-  const CONTEXT_OPTIONS: { id: ContextMode; label: string }[] = [
-    { id: "current", label: "Current" },
-    { id: "current+related", label: "Current + related" },
-    { id: "vault", label: "Whole vault" },
+  const CONTEXT_OPTIONS: { id: ContextMode; label: string; hint: string }[] = [
+    { id: "current", label: "Current", hint: "this page only" },
+    { id: "current+related", label: "Current + related", hint: "plus similar notes" },
+    { id: "vault", label: "Whole vault", hint: "widest search, most tokens" },
   ];
 
-  function cycleContext() {
-    const idx = CONTEXT_OPTIONS.findIndex((c) => c.id === chatState.contextMode);
-    chatState.contextMode = CONTEXT_OPTIONS[(idx + 1) % CONTEXT_OPTIONS.length].id;
-    void persistChatPrefs();
-  }
+  let modelItems = $derived(
+    CHAT_MODELS.map((m) => ({
+      label: m.label,
+      hint: m.id === chatState.model ? "current" : undefined,
+      action: () => {
+        chatState.model = m.id;
+        void persistChatPrefs();
+      },
+    })),
+  );
+
+  let contextItems = $derived(
+    CONTEXT_OPTIONS.map((c) => ({
+      label: c.label,
+      hint: c.id === chatState.contextMode ? "current" : c.hint,
+      action: () => {
+        chatState.contextMode = c.id;
+        void persistChatPrefs();
+      },
+    })),
+  );
 
   function contextLabel(): string {
     return (
@@ -249,7 +271,12 @@
 {:else if mode === "open"}
   <div class="sk-side">
     <div class="sk-side-hd">
-      <button class="sk-pill bare" onclick={cycleModel} title="Click to change model">
+      <button
+        class="sk-pill bare"
+        onclick={(e) => (modelMenu = anchorOf(e))}
+        aria-haspopup="menu"
+        title="Choose the chat model"
+      >
         <span class="dot"></span>
         {modelLabel(chatState.model)}
         <span class="chev">
@@ -267,8 +294,9 @@
       </button>
       <button
         class="sk-pill context bare"
-        onclick={cycleContext}
-        title="Click to change context mode"
+        onclick={(e) => (contextMenu = anchorOf(e))}
+        aria-haspopup="menu"
+        title="Choose how much of the vault to send"
       >
         {contextLabel()}
         <span class="chev">
@@ -292,6 +320,23 @@
         <span class="prefs-error" title={prefsError} aria-live="polite">! save failed</span>
       {/if}
     </div>
+
+    {#if modelMenu}
+      <ContextMenu
+        x={modelMenu.x}
+        y={modelMenu.y}
+        items={modelItems}
+        onclose={() => (modelMenu = null)}
+      />
+    {/if}
+    {#if contextMenu}
+      <ContextMenu
+        x={contextMenu.x}
+        y={contextMenu.y}
+        items={contextItems}
+        onclose={() => (contextMenu = null)}
+      />
+    {/if}
 
     {#if keyConfigured === false}
       <div class="key-hint">
@@ -475,6 +520,6 @@
   .mention-popup .mr {
     font-family: "JetBrains Mono", monospace;
     font-size: 10px;
-    color: var(--ink-4);
+    color: var(--ink-3);
   }
 </style>

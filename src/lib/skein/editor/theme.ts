@@ -81,7 +81,7 @@ export const skeinEditorTheme = EditorView.theme(
       color: "var(--ink-2)",
     },
     ".sk-mark": {
-      color: "var(--ink-4)",
+      color: "var(--ink-3)",
       fontFamily: '"JetBrains Mono", monospace',
       fontSize: "0.88em",
     },

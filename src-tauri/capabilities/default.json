@@ -8,6 +8,10 @@
     "dialog:default",
     "notification:default",
     "clipboard-manager:allow-read-image",
-    "clipboard-manager:allow-read-text"
+    "clipboard-manager:allow-read-text",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [{ "url": "https://github.com/*" }]
+    }
   ]
 }

@@ -13,8 +13,11 @@
 
   --ink: oklch(0.92 0.012 80);
   --ink-2: oklch(0.78 0.015 75);
-  --ink-3: oklch(0.6 0.012 70);
-  --ink-4: oklch(0.42 0.01 65);
+  /* ink-3 carries all the small functional text (counts, paths, strip
+     labels), so it must clear WCAG AA 4.5:1 on page/paper-2/chrome-2.
+     ink-4 is decorative/disabled only — it clears 3:1, not 4.5:1. */
+  --ink-3: oklch(0.66 0.012 70);
+  --ink-4: oklch(0.55 0.01 65);
 
   --chrome: oklch(0.18 0.006 60);
   --chrome-2: oklch(0.22 0.008 60);
@@ -25,6 +28,13 @@
   --accent: oklch(0.78 0.13 75);
   --accent-soft: oklch(0.78 0.13 75 / 0.18);
   --accent-edge: oklch(0.78 0.13 75 / 0.55);
+
+  --danger: oklch(0.68 0.17 25);
+  --danger-soft: oklch(0.68 0.17 25 / 0.16);
+  --danger-edge: oklch(0.68 0.17 25 / 0.5);
+  --ok: oklch(0.75 0.12 150);
+  --ok-soft: oklch(0.75 0.12 150 / 0.15);
+  --ok-edge: oklch(0.75 0.12 150 / 0.5);
 
   --user-msg: oklch(0.3 0.012 65);
   --asst-msg: oklch(0.24 0.009 60);
@@ -53,7 +63,7 @@
   --ink: oklch(0.22 0.015 60);
   --ink-2: oklch(0.36 0.018 60);
   --ink-3: oklch(0.5 0.015 60);
-  --ink-4: oklch(0.65 0.012 60);
+  --ink-4: oklch(0.56 0.012 60);
 
   --chrome: oklch(0.96 0.008 80);
   --chrome-2: oklch(0.93 0.01 80);
@@ -64,6 +74,13 @@
   --accent: oklch(0.62 0.15 55);
   --accent-soft: oklch(0.62 0.15 55 / 0.14);
   --accent-edge: oklch(0.62 0.15 55 / 0.55);
+
+  --danger: oklch(0.5 0.19 25);
+  --danger-soft: oklch(0.5 0.19 25 / 0.12);
+  --danger-edge: oklch(0.5 0.19 25 / 0.45);
+  --ok: oklch(0.5 0.13 150);
+  --ok-soft: oklch(0.5 0.13 150 / 0.12);
+  --ok-edge: oklch(0.5 0.13 150 / 0.45);
 
   --user-msg: oklch(0.9 0.013 80);
   --asst-msg: oklch(0.95 0.01 80);
@@ -486,7 +503,7 @@
 .sk-tab .pin-ind {
   width: 9px;
   height: 9px;
-  color: var(--ink-4);
+  color: var(--ink-3);
   flex-shrink: 0;
 }
 .sk-tab .name {
@@ -501,7 +518,7 @@
   align-items: center;
   justify-content: center;
   border-radius: 3px;
-  color: var(--ink-4);
+  color: var(--ink-3);
   font-size: 13px;
   line-height: 1;
   margin-left: 2px;
@@ -527,7 +544,7 @@
 }
 .sk-tabs-empty {
   height: 34px;
-  color: var(--ink-4);
+  color: var(--ink-3);
   font-family: "Source Serif 4", serif;
   font-style: italic;
   display: flex;
@@ -605,7 +622,7 @@
   margin-bottom: 3px;
 }
 .sk-page-inner .md-syntax {
-  color: var(--ink-4);
+  color: var(--ink-3);
   font-family: "JetBrains Mono", monospace;
   font-size: 0.88em;
 }
@@ -732,7 +749,7 @@
   top: 24px;
   left: 50%;
   transform: translateX(-50%);
-  color: var(--ink-4);
+  color: var(--ink-3);
   font-size: 12px;
   letter-spacing: 0.04em;
   text-align: center;
@@ -796,7 +813,7 @@
   right: 16px;
   font-family: "Inter", sans-serif;
   font-size: 10px;
-  color: var(--ink-4);
+  color: var(--ink-3);
   letter-spacing: 0.04em;
   display: flex;
   justify-content: space-between;
@@ -844,7 +861,7 @@
   background: var(--accent);
 }
 .sk-pill .chev {
-  color: var(--ink-4);
+  color: var(--ink-3);
   font-size: 9px;
 }
 .sk-pill.context {
@@ -873,7 +890,12 @@
 
 .sk-chat {
   flex: 1;
-  overflow: hidden;
+  /* Scrollable: a conversation is unbounded and `hidden` made every
+     message past the first screenful unreachable. min-height:0 is what
+     lets a flex child actually shrink and scroll. */
+  overflow-y: auto;
+  min-height: 0;
+  overscroll-behavior: contain;
   padding: 10px 12px 14px;
   display: flex;
   flex-direction: column;
@@ -978,7 +1000,7 @@
   padding: 0 8px;
   border-radius: 5px;
   background: transparent;
-  color: var(--ink-4);
+  color: var(--ink-3);
   border: 0;
   font: inherit;
   font-size: 11px;

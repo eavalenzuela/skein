@@ -5,7 +5,12 @@
   import { openTab, closeTab, tabsState } from "../tabs.svelte.js";
   import { close as closeVault, vaultState } from "../vault.svelte.js";
   import { getCurrentWindow } from "@tauri-apps/api/window";
+  import { openUrl } from "@tauri-apps/plugin-opener";
+  import { openShortcuts } from "../shortcutsUi.svelte.js";
+  import { toastError, toastInfo } from "../toasts.svelte.js";
   import ContextMenu, { type MenuItem } from "./ContextMenu.svelte";
+
+  const REPO_URL = "https://github.com/eavalenzuela/skein";
 
   interface Props {
     vault: string;
@@ -39,7 +44,7 @@
 
   const fileItems: MenuItem[] = [
     { label: "New page…", action: () => void newPagePrompt() },
-    { label: "Today's daily note", action: () => void jumpToToday() },
+    { label: "Today's daily note", action: () => void jumpToToday(), hint: "Ctrl+D" },
     { separator: true, label: "", action: () => {} },
     { label: "Switch vault…", action: () => void closeVault() },
     { separator: true, label: "", action: () => {} },
@@ -68,7 +73,7 @@
       action: () => document.execCommand?.("paste"),
     },
     { separator: true, label: "", action: () => {} },
-    { label: "Find in vault…", action: () => void openSearch() },
+    { label: "Find in vault…", action: () => void openSearch(), hint: "Ctrl+K" },
   ];
   const viewItems: MenuItem[] = [
     {
@@ -83,7 +88,7 @@
       action: () => void rebuildIndex(),
     },
     { separator: true, label: "", action: () => {} },
-    { label: "Settings…", action: () => openSettings() },
+    { label: "Settings…", action: () => openSettings(), hint: "Ctrl+," },
     {
       label: "Toggle full-screen",
       action: () => void toggleFullscreen(),
@@ -93,33 +98,25 @@
     {
       label: "Skein on GitHub",
       action: () => {
-        window.open("https://github.com/anthropics/skein", "_blank");
+        // window.open is a no-op in the Tauri webview; the opener plugin
+        // hands the URL to the system browser.
+        void openUrl(REPO_URL).catch((e) =>
+          toastError("Couldn't open your browser", String(e)),
+        );
       },
     },
     {
       label: "Keyboard shortcuts",
-      action: () => {
-        window.alert(
-          "Skein keyboard shortcuts:\n\n" +
-            "Ctrl+K — Search / command palette\n" +
-            "Ctrl+D — Today's daily note\n" +
-            "Ctrl+, — Settings\n" +
-            "Esc — Close modal\n" +
-            "↑↓ Enter — Navigate / open in palette\n" +
-            "# in palette — Search by tag\n" +
-            "Right-click — Context menu on books and pages\n" +
-            "Drag book spine — Reorder shelf or open in pane",
-        );
-      },
+      action: openShortcuts,
+      hint: "Ctrl+/",
     },
     { separator: true, label: "", action: () => {} },
     {
       label: "About Skein",
       action: () => {
-        window.alert(
-          "Skein — local note-taking with semantic search and an embedded Claude chat.\n\n" +
-            `Vault: ${vaultState.vault?.name ?? "(none)"}\n` +
-            `Path: ${vaultState.vault?.root ?? "(none)"}`,
+        toastInfo(
+          "Skein — local notes with semantic search and an embedded Claude chat",
+          `${vaultState.vault?.name ?? "no vault"} · ${vaultState.vault?.root ?? ""}`,
         );
       },
     },

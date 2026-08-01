@@ -363,7 +363,10 @@
             </div>
             <div class="actions">
               <button onclick={pickNewVault}>change…</button>
-              <button class="danger" onclick={closeVault}>close</button>
+              <!-- Named for what it does: a bare "close" next to the dialog's
+                   own × reads as "close this dialog", and styling it as a
+                   danger button made that misread destructive-looking. -->
+              <button onclick={closeVault}>close vault</button>
             </div>
           </div>
           <div class="row">
@@ -419,6 +422,12 @@
             />
             <div class="grid-label">Branch</div>
             <input type="text" bind:value={gitBranch} placeholder="main" />
+            <div class="grid-label">Commit message</div>
+            <input
+              type="text"
+              bind:value={gitCommitMsg}
+              placeholder="used when pushing (optional)"
+            />
             <div class="grid-label">Auth</div>
             <div class="radios">
               <label class="opt">
@@ -454,13 +463,6 @@
               <button onclick={runPull} disabled={gitBusy}>pull</button>
               <button onclick={runPush} disabled={gitBusy}>push</button>
             </div>
-          </div>
-          <div class="row">
-            <input
-              type="text"
-              bind:value={gitCommitMsg}
-              placeholder="commit message for push (optional)"
-            />
           </div>
 
           {#if gitStatusData}
@@ -833,6 +835,11 @@
     width: max-content;
     min-width: 200px;
   }
+  /* Base styling for every free-text field in the modal. The Sync section's
+     inputs previously carried no class and rendered as native white boxes
+     inside the dark chrome; styling by type means a new field can't drift. */
+  .body input[type="text"],
+  .body input[type="password"],
   .text-input {
     padding: 6px 10px;
     background: oklch(from var(--chrome-2) calc(l + 0.03) c h);
@@ -843,6 +850,14 @@
     font-size: 12px;
     outline: none;
     width: 240px;
+  }
+  /* The Sync grid gives its fields a full column. */
+  .grid > input[type="text"] {
+    width: 100%;
+  }
+  .body input[type="text"]:focus,
+  .body input[type="password"]:focus {
+    border-color: var(--accent-edge);
   }
   .text-input.small {
     width: 120px;
@@ -883,11 +898,11 @@
       transform: translateX(330%);
     }
   }
+  /* Plain caption, not a section header — uppercase + tracking made this
+     status line outrank the real <h3>s above it. */
   .git-fresh {
     margin-bottom: 4px;
-    font-size: 10.5px;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
+    font-size: 11px;
   }
   .git-age {
     color: var(--ink-3);

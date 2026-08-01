@@ -16,6 +16,7 @@
   } from "./tabs.svelte.js";
   import { searchUi, openSearch, closeSearch } from "./searchUi.svelte.js";
   import { settingsUi, openSettings, closeSettings } from "./settingsUi.svelte.js";
+  import { shortcutsUi, closeShortcuts, toggleShortcuts } from "./shortcutsUi.svelte.js";
   import { openTodayDaily } from "./vault.js";
   import Titlebar from "./components/Titlebar.svelte";
   import VaultBookshelf from "./components/VaultBookshelf.svelte";
@@ -23,12 +24,14 @@
   import EditorPage from "./components/EditorPage.svelte";
   import PinPlaceholder from "./components/PinPlaceholder.svelte";
   import PageList from "./components/PageList.svelte";
-  import EmptyDesk from "./components/EmptyDesk.svelte";
+  import EmptyVault from "./components/EmptyVault.svelte";
+  import Toasts from "./components/Toasts.svelte";
   import Sidebar from "./components/Sidebar.svelte";
   import CommandPalette from "./components/CommandPalette.svelte";
   import RelatedStrip from "./components/RelatedStrip.svelte";
   import LinkedFromStrip from "./components/LinkedFromStrip.svelte";
   import SettingsModal from "./components/SettingsModal.svelte";
+  import ShortcutsOverlay from "./components/ShortcutsOverlay.svelte";
 
   function onKeydown(e: KeyboardEvent) {
     if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K")) {
@@ -45,6 +48,9 @@
     } else if ((e.ctrlKey || e.metaKey) && (e.key === "d" || e.key === "D")) {
       e.preventDefault();
       void jumpToDaily();
+    } else if ((e.ctrlKey || e.metaKey) && (e.key === "/" || e.key === "?")) {
+      e.preventDefault();
+      toggleShortcuts();
     }
   }
 
@@ -265,11 +271,12 @@
                 book={null}
               />
             {:else}
-              <EmptyDesk />
+              <EmptyVault />
             {/if}
           {/if}
         </div>
         <Sidebar mode={sidebar} />
+        <Toasts />
       </div>
     </div>
   </div>
@@ -280,6 +287,10 @@
 
   {#if settingsUi.open}
     <SettingsModal onClose={closeSettings} />
+  {/if}
+
+  {#if shortcutsUi.open}
+    <ShortcutsOverlay onClose={closeShortcuts} />
   {/if}
 </div>
 

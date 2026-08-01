@@ -168,16 +168,32 @@
     }
   }
 
+  let resultsEl: HTMLUListElement | undefined = $state();
+
+  /** Keep the keyboard selection on screen. The list scrolls at 50vh and
+   * holds up to 30 hits, so without this Enter opens an invisible row. */
+  function revealActive() {
+    requestAnimationFrame(() => {
+      resultsEl?.querySelector("li.active")?.scrollIntoView({ block: "nearest" });
+    });
+  }
+
   function onKeydown(e: KeyboardEvent) {
     if (e.key === "Escape") {
       e.preventDefault();
       closeSearch();
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
-      if (resultCount > 0) active = (active + 1) % resultCount;
+      if (resultCount > 0) {
+        active = (active + 1) % resultCount;
+        revealActive();
+      }
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      if (resultCount > 0) active = (active - 1 + resultCount) % resultCount;
+      if (resultCount > 0) {
+        active = (active - 1 + resultCount) % resultCount;
+        revealActive();
+      }
     } else if (e.key === "Enter") {
       e.preventDefault();
       if (isCommandMode) {
@@ -238,7 +254,7 @@
       >
       <span class="kbd">↑↓ navigate · ⏎ open · esc close</span>
     </div>
-    <ul class="results">
+    <ul class="results" bind:this={resultsEl}>
       {#if isCommandMode}
         {#each cmdHits as cmd, i (cmd.id)}
           <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -313,14 +329,14 @@
     outline: none;
   }
   input::placeholder {
-    color: var(--ink-4);
+    color: var(--ink-3);
   }
   .hint-row {
     display: flex;
     justify-content: space-between;
     padding: 6px 18px;
     font-size: 11px;
-    color: var(--ink-4);
+    color: var(--ink-3);
     border-bottom: 1px solid var(--chrome-edge);
     letter-spacing: 0.04em;
   }
@@ -352,7 +368,7 @@
   .rp {
     font-family: "JetBrains Mono", monospace;
     font-size: 10.5px;
-    color: var(--ink-4);
+    color: var(--ink-3);
     margin-bottom: 4px;
   }
   .snip {
@@ -380,7 +396,7 @@
   .cmd-hint {
     font-family: "JetBrains Mono", monospace;
     font-size: 10.5px;
-    color: var(--ink-4);
+    color: var(--ink-3);
     border: 1px solid var(--chrome-edge);
     border-radius: 3px;
     padding: 1px 5px;

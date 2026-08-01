@@ -36,6 +36,10 @@ export const vaultState: {
 
 let unlisten: UnlistenFn | null = null;
 
+export async function refreshVault() {
+  await refreshVaultLists();
+}
+
 async function refreshVaultLists() {
   if (!vaultState.vault) return;
   try {

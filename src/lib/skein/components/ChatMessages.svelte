@@ -1,6 +1,25 @@
 <script lang="ts">
   import { chatState } from "../chat.svelte.js";
 
+  let logEl: HTMLDivElement | undefined = $state();
+  // Follow the stream only while the user is already at the bottom; if
+  // they've scrolled up to read something, leave them there.
+  let following = $state(true);
+
+  function onScroll() {
+    if (!logEl) return;
+    const slack = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight;
+    following = slack < 40;
+  }
+
+  $effect(() => {
+    // Touch the streaming content so this re-runs as tokens arrive.
+    const last = chatState.messages[chatState.messages.length - 1];
+    void chatState.messages.length;
+    void last?.content;
+    if (following && logEl) logEl.scrollTop = logEl.scrollHeight;
+  });
+
   function onDragStart(e: DragEvent) {
     const sel = window.getSelection();
     if (!sel || sel.toString().length === 0) return;
@@ -10,7 +29,7 @@
   }
 </script>
 
-<div class="sk-chat" role="log" aria-live="polite">
+<div class="sk-chat" role="log" aria-live="polite" bind:this={logEl} onscroll={onScroll}>
   {#each chatState.messages as m (m.id)}
     {#if m.role === "user"}
       <div
@@ -77,7 +96,7 @@
     font-size: 10.5px;
   }
   .ctx-label {
-    color: var(--ink-4);
+    color: var(--ink-3);
     text-transform: uppercase;
     letter-spacing: 0.06em;
   }
@@ -94,7 +113,7 @@
     cursor: default;
   }
   .ctx-h {
-    color: var(--ink-4);
+    color: var(--ink-3);
   }
   .error {
     margin-top: 8px;

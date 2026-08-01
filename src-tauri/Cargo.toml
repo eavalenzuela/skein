@@ -37,6 +37,7 @@ uuid = { version = "1", features = ["v4"] }
 serde_yaml_ng = "0.10"
 zip = { version = "2", default-features = false, features = ["deflate"] }
 git2 = { version = "0.20", default-features = false, features = ["https", "ssh", "vendored-libgit2", "vendored-openssl"] }
+tauri-plugin-opener = "2.5.4"
 
 [dev-dependencies]
 tempfile = "3"

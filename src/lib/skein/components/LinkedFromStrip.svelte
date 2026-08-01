@@ -73,7 +73,7 @@
     font-size: 10.5px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--ink-4);
+    color: var(--ink-3);
     flex-shrink: 0;
   }
   .hits {

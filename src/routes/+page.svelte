@@ -43,6 +43,9 @@
       pageFont={tweaks.pageFont}
     />
   {:else if designPreview}
+    <button class="preview-link" onclick={() => (designPreview = false)}
+      >&laquo; Leave the design preview</button
+    >
     <SkeinWindow
       theme={tweaks.theme}
       shelfStyle={tweaks.shelfStyle}
@@ -53,9 +56,13 @@
     />
   {:else}
     <VaultPicker />
-    <button class="preview-link" onclick={() => (designPreview = true)}
-      >Skip — see the design preview</button
-    >
+    {#if showDevControls}
+      <!-- Dev-only: SkeinWindow is the static Phase-1 mockup with no way
+           back to the picker, so it must not ship to release builds. -->
+      <button class="preview-link" onclick={() => (designPreview = true)}
+        >Skip — see the design preview</button
+      >
+    {/if}
   {/if}
 </div>
 

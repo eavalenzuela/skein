@@ -126,13 +126,13 @@
   }
   .label {
     font-size: 10.5px;
-    color: var(--ink-4);
+    color: var(--ink-3);
     letter-spacing: 0.06em;
     text-transform: uppercase;
     margin-right: 4px;
   }
   .muted {
-    color: var(--ink-4);
+    color: var(--ink-3);
     font-size: 11.5px;
     font-style: italic;
   }

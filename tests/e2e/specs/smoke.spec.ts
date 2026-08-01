@@ -38,6 +38,8 @@ test("vault picker shows when no vault is open", async ({ page }) => {
 
   await page.goto("/");
   await expect(page.locator(".loading")).toHaveCount(0, { timeout: 10_000 });
-  // VaultPicker should be visible. The "preview" link is also visible in this state.
-  await expect(page.getByText(/skip — see the design preview/i)).toBeVisible();
+  await expect(page.getByRole("button", { name: /choose vault folder/i })).toBeVisible();
+  // The design-preview escape hatch is dev-only — SkeinWindow is a static
+  // mockup, so shipping the link would strand first-run users in it.
+  await expect(page.getByText(/skip — see the design preview/i)).toHaveCount(0);
 });

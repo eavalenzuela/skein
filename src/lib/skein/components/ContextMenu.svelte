@@ -4,6 +4,8 @@
     action: () => void;
     danger?: boolean;
     separator?: boolean;
+    /** Keyboard shortcut shown right-aligned, e.g. "Ctrl+K". */
+    hint?: string;
   }
 </script>
 
@@ -109,7 +111,8 @@
         }}
         role="menuitem"
       >
-        {item.label}
+        <span class="lbl">{item.label}</span>
+        {#if item.hint}<span class="hint">{item.hint}</span>{/if}
       </button>
     {/if}
   {/each}
@@ -129,7 +132,9 @@
     font-size: 12px;
   }
   .item {
-    display: block;
+    display: flex;
+    align-items: baseline;
+    gap: 18px;
     width: 100%;
     text-align: left;
     background: transparent;
@@ -138,6 +143,14 @@
     color: var(--ink, #e6e6e6);
     cursor: pointer;
     font: inherit;
+  }
+  .lbl {
+    flex: 1;
+  }
+  .hint {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10.5px;
+    color: var(--ink-3);
   }
   .item:hover,
   .item.active {

@@ -123,7 +123,7 @@
     width: 18px;
     height: 18px;
     border-radius: 3px;
-    color: var(--ink-4);
+    color: var(--ink-3);
     font-size: 13px;
     line-height: 1;
     margin-left: 2px;

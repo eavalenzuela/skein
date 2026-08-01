@@ -422,7 +422,7 @@
   .rp {
     font-family: "JetBrains Mono", monospace;
     font-size: 11px;
-    color: var(--ink-4);
+    color: var(--ink-3);
   }
 
   .overlay {
