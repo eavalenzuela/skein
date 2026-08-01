@@ -491,12 +491,18 @@
     flex: 0 0 auto;
     align-self: flex-end;
     border-radius: 3px;
-    background: oklch(0 0 0 / 0.09);
-    box-shadow: inset 0 1px 2px oklch(0 0 0 / 0.18);
+    /* Dark wood is already near-black, so a 9% scrim was invisible at 1x.
+       Deepen the recess and add a lit bottom lip to give it an edge. */
+    background: oklch(0 0 0 / 0.28);
+    box-shadow:
+      inset 0 2px 4px oklch(0 0 0 / 0.45),
+      0 1px 0 oklch(1 0 0 / 0.05);
   }
   :global(.skein.theme-light) .ghost-slot {
-    background: oklch(0 0 0 / 0.07);
-    box-shadow: inset 0 1px 2px oklch(0 0 0 / 0.1);
+    background: oklch(0 0 0 / 0.1);
+    box-shadow:
+      inset 0 2px 3px oklch(0 0 0 / 0.16),
+      0 1px 0 oklch(1 0 0 / 0.35);
   }
 
   /* Expressed in theme tokens: the previous hard-coded values were tuned

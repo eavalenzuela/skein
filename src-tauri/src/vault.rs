@@ -49,10 +49,17 @@ pub struct Page {
 }
 
 fn rel_string(root: &Path, full: &Path) -> Option<String> {
-    full.strip_prefix(root)
-        .ok()
-        .and_then(|p| p.to_str())
-        .map(|s| s.replace('\\', "/"))
+    let rel = full.strip_prefix(root).ok()?;
+    // strip_prefix is purely lexical, so `<root>/../outside/x.md` yields
+    // `../outside/x.md` rather than failing. A rel_path handed back to the
+    // frontend must never be able to point outside the vault.
+    if rel
+        .components()
+        .any(|c| matches!(c, std::path::Component::ParentDir))
+    {
+        return None;
+    }
+    rel.to_str().map(|s| s.replace('\\', "/"))
 }
 
 /// Reject a vault-relative path before it ever touches the filesystem.
@@ -71,17 +78,18 @@ pub fn check_rel_path(rel_path: &str) -> Result<()> {
     if p.is_absolute() {
         anyhow::bail!("path must be relative to the vault: {rel_path}");
     }
+    // Only Normal and CurDir are safe. ParentDir, RootDir and Windows
+    // Prefix (the `C:` of a drive-relative path) are all rejected here —
+    // and because the parser is platform-aware, a colon is treated as a
+    // drive letter exactly where it is one. On unix it's an ordinary
+    // filename character, and notes called "1:1 with Bob.md" are common in
+    // imported vaults.
     for comp in p.components() {
         match comp {
             std::path::Component::Normal(_) => {}
             std::path::Component::CurDir => {}
             _ => anyhow::bail!("path escapes vault root: {rel_path}"),
         }
-    }
-    // Windows drive-relative forms ("C:foo") parse as Normal on unix, so
-    // reject the syntax outright rather than per-platform.
-    if rel_path.len() >= 2 && rel_path.as_bytes()[1] == b':' {
-        anyhow::bail!("path escapes vault root: {rel_path}");
     }
     Ok(())
 }
@@ -323,7 +331,10 @@ pub fn list_loose_pages(vault: &Vault) -> Result<Vec<Page>> {
 }
 
 pub fn list_pages_in_book(vault: &Vault, book: &str) -> Result<Vec<Page>> {
-    let book_dir = vault.root.join(book);
+    // The book name arrives straight from IPC. Without this it enumerated
+    // any directory on disk, returning each file's frontmatter title and
+    // tags to the webview.
+    let book_dir = resolve_in_vault(vault, book, true)?;
     if !book_dir.is_dir() {
         anyhow::bail!("book not found: {}", book);
     }

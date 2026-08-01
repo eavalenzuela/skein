@@ -431,6 +431,14 @@ export async function reconcileExternal() {
     if (isDirty(tab)) continue;
     try {
       const body = await readPage(tab.rel_path);
+      // A tab that previously failed to load has just read successfully —
+      // clear the error so it stops rendering the read-only panel.
+      if (tab.loadError) {
+        tab.loadError = undefined;
+        tab.body = body;
+        tab.saved = body;
+        continue;
+      }
       if (body !== tab.body) {
         tab.body = body;
         tab.saved = body;

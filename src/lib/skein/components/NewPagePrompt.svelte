@@ -58,7 +58,10 @@
     use:focusTrap
     onclick={(e) => e.stopPropagation()}
     onkeydown={(e) => {
-      if (e.key === "Escape") cancel();
+      if (e.key !== "Escape") return;
+      // See ShortcutsOverlay: don't let Escape reach a modal underneath.
+      e.stopPropagation();
+      cancel();
     }}
   >
     <h2>New page{newPagePrompt.book ? ` in ${newPagePrompt.book}` : " in Folio"}</h2>

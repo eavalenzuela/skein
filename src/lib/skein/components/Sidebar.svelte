@@ -13,7 +13,7 @@
   import { activeTab, openTab, bookOf } from "../tabs.svelte.js";
   import { createPage, writePage } from "../vault.js";
   import { refreshVault } from "../vault.svelte.js";
-  import { toastError, toastSuccess } from "../toasts.svelte.js";
+  import { toastError, toastInfo, toastSuccess } from "../toasts.svelte.js";
   import { hasSecret, getSettings, setSettings } from "../settings.js";
   import { openSettings } from "../settingsUi.svelte.js";
   import { titlesState } from "../titles.svelte.js";
@@ -214,9 +214,17 @@
 
   function newConversation() {
     // A long transcript is re-sent whole on every turn, so this is a cost
-    // control as much as a tidy-up.
+    // control as much as a tidy-up. The transcript isn't recoverable, so
+    // offer the way back before it's gone.
     if (chatState.messages.length === 0) return;
+    const previous = chatState.messages;
     clearConversation();
+    toastInfo("Started a new conversation", undefined, {
+      label: "Undo",
+      run: () => {
+        chatState.messages = previous;
+      },
+    });
   }
 
   /** Write the conversation into the vault as a normal page, so an answer

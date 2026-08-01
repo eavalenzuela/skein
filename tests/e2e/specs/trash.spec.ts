@@ -55,7 +55,17 @@ test.describe("Trash and undo", () => {
     await page.getByRole("button", { name: /^settings/i }).first().click();
     const settings = page.getByRole("dialog", { name: /^settings$/i });
     await expect(settings.locator(".trash-list li")).toHaveCount(1);
+
+    // Emptying is irreversible, so it asks first.
     await settings.getByRole("button", { name: /empty trash/i }).click();
+    await expect(settings.getByText(/delete these for good\?/i)).toBeVisible();
+    await expect(settings.locator(".trash-list li")).toHaveCount(1);
+
+    await settings.getByRole("button", { name: /^cancel$/i }).click();
+    await expect(settings.locator(".trash-list li")).toHaveCount(1);
+
+    await settings.getByRole("button", { name: /empty trash/i }).click();
+    await settings.getByRole("button", { name: /yes, delete/i }).click();
     await expect(settings.getByText(/nothing in the trash/i)).toBeVisible();
   });
 });

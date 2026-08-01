@@ -24,7 +24,14 @@
     type TrashEntry,
   } from "../vault.js";
   import { toastSuccess } from "../toasts.svelte.js";
-  import { settingsState, setAutoTag } from "../settingsUi.svelte.js";
+  import {
+    settingsState,
+    setAutoTag,
+    registerSettingsCloseGuard,
+  } from "../settingsUi.svelte.js";
+  import { searchUi } from "../searchUi.svelte.js";
+  import { shortcutsUi } from "../shortcutsUi.svelte.js";
+  import { newPagePrompt } from "./NewPagePrompt.svelte";
   import {
     hasSecret,
     setSecret,
@@ -76,9 +83,13 @@
       if (s.daily_book) dailyBook = s.daily_book;
       if (s.daily_template) dailyTemplate = s.daily_template;
       if (s.daily_reminder_time) dailyReminderTime = s.daily_reminder_time;
-      markDailyClean();
     } catch (e) {
       dailyError = String(e);
+    } finally {
+      // Baseline the fields either way. If the load failed we still want
+      // edits made afterwards to be guarded, rather than silently
+      // switching the guard off.
+      markDailyClean();
     }
   }
 
@@ -86,11 +97,16 @@
   // an explicit save. Closing the modal used to throw those edits away
   // silently — an Escape press, trained by the palette, could lose a git
   // remote or a rewritten template. Track a baseline and confirm instead.
-  let dailyBaseline = $state("");
-  let gitBaseline = $state("");
+  // null means "baseline not captured yet"; an empty string is a legitimate
+  // snapshot, so it must not double as the sentinel — otherwise a failed
+  // getSettings() would silently disable the guard.
+  let dailyBaseline = $state<string | null>(null);
+  let gitBaseline = $state<string | null>(null);
 
   const dailySnapshot = () => JSON.stringify([dailyBook, dailyTemplate, dailyReminderTime]);
-  const gitSnapshot = () => JSON.stringify([gitRemote, gitBranch, gitAuthKind, gitCommitMsg]);
+  // gitCommitMsg is deliberately excluded: "save" never persists it, so
+  // including it would leave the modal permanently dirty after a push.
+  const gitSnapshot = () => JSON.stringify([gitRemote, gitBranch, gitAuthKind]);
 
   function markDailyClean() {
     dailyBaseline = dailySnapshot();
@@ -99,8 +115,8 @@
     gitBaseline = gitSnapshot();
   }
 
-  let dailyDirty = $derived(dailyBaseline !== "" && dailySnapshot() !== dailyBaseline);
-  let gitDirty = $derived(gitBaseline !== "" && gitSnapshot() !== gitBaseline);
+  let dailyDirty = $derived(dailyBaseline !== null && dailySnapshot() !== dailyBaseline);
+  let gitDirty = $derived(gitBaseline !== null && gitSnapshot() !== gitBaseline);
   let dirtySections = $derived(
     [dailyDirty ? "Daily notes" : null, gitDirty ? "Sync" : null].filter(
       (s): s is string => s !== null,
@@ -115,6 +131,12 @@
     confirmingClose = true;
   }
   let confirmingClose = $state(false);
+
+  // Let the Ctrl+, shortcut close through the same check.
+  onMount(() => {
+    registerSettingsCloseGuard(requestClose);
+    return () => registerSettingsCloseGuard(null);
+  });
 
   async function saveDaily() {
     dailySaving = true;
@@ -198,9 +220,10 @@
       if (s.git_auth_kind) {
         gitAuthKind = (s.git_auth_kind as typeof gitAuthKind) || "none";
       }
-      markGitClean();
     } catch (e) {
       gitError = String(e);
+    } finally {
+      markGitClean();
     }
   }
 
@@ -339,7 +362,11 @@
     }
   }
 
+  // Emptying is the one irreversible action in the trash flow, so it asks.
+  let confirmingEmpty = $state(false);
+
   async function emptyAll() {
+    confirmingEmpty = false;
     trashBusy = true;
     trashError = null;
     try {
@@ -446,6 +473,10 @@
 <svelte:window
   onkeydown={(e) => {
     if (e.key !== "Escape") return;
+    // Settings can have the palette or the shortcuts overlay stacked on
+    // top of it; whichever is frontmost owns Escape. Without this one
+    // press dismissed both.
+    if (searchUi.open || shortcutsUi.open || newPagePrompt.open) return;
     e.preventDefault();
     if (confirmingClose) confirmingClose = false;
     else requestClose();
@@ -530,9 +561,11 @@
       <section>
         <h3>Privacy</h3>
         <p class="muted">
-          Skein is local-first: your vault, index and embeddings never leave
-          this machine. Two features do send text to Anthropic — the chat
-          sidebar, when you send a message, and auto-tagging, below.
+          Skein is local-first: your vault and its index live only on this
+          machine, and embeddings are computed here too unless you configure
+          a Voyage key below. Text leaves only when you ask it to — the chat
+          sidebar, when you send a message — plus auto-tagging if you turn it
+          on. There is no telemetry.
         </p>
         <div class="row">
           <div class="kv">
@@ -587,9 +620,21 @@
                 {trashItems.length === 1 ? "page" : "pages"} recoverable
               </p>
               <div class="actions">
-                <button class="danger" onclick={() => void emptyAll()} disabled={trashBusy}>
-                  empty trash
-                </button>
+                {#if confirmingEmpty}
+                  <span class="muted">Delete these for good?</span>
+                  <button onclick={() => (confirmingEmpty = false)}>cancel</button>
+                  <button class="danger" onclick={() => void emptyAll()} disabled={trashBusy}>
+                    yes, delete
+                  </button>
+                {:else}
+                  <button
+                    class="danger"
+                    onclick={() => (confirmingEmpty = true)}
+                    disabled={trashBusy}
+                  >
+                    empty trash
+                  </button>
+                {/if}
               </div>
             </div>
           {/if}
@@ -844,7 +889,10 @@
         <div class="key">
           <div class="key-info">
             <span class="k">Voyage</span>
-            <span class="v">Optional. Higher-quality remote embeddings (Phase 5c).</span>
+            <span class="v"
+              >Optional. Higher-quality embeddings, computed remotely — note text
+              is sent to Voyage. Leave unset to embed locally.</span
+            >
           </div>
           <div class="key-input">
             {#if voyageSet && !voyageInput}
@@ -1084,7 +1132,8 @@
     font-size: 12px;
     color: var(--ink-2);
   }
-  input[type="radio"] {
+  input[type="radio"],
+  input[type="checkbox"] {
     accent-color: var(--accent);
   }
   select {

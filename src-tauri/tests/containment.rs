@@ -264,3 +264,73 @@ fn emptying_the_trash_clears_everything() {
     assert_eq!(trash::empty(&v).unwrap(), 2);
     assert!(trash::list(&v).is_empty());
 }
+
+#[test]
+fn listing_a_book_cannot_enumerate_directories_outside_the_vault() {
+    let (_tmp, v, outside) = vault_with_outside();
+    fs::write(
+        outside.join("private.md"),
+        "---\ntitle: Salary negotiation\ntags: [hr]\n---\n\nbody\n",
+    )
+    .unwrap();
+
+    // list_pages_in_book was the one caller-supplied path the containment
+    // helper missed: it returned each file's frontmatter title and tags.
+    assert!(vault::list_pages_in_book(&v, "../outside").is_err());
+    assert!(vault::list_pages_in_book(&v, "/etc").is_err());
+}
+
+#[test]
+fn a_colon_in_a_note_name_is_not_a_windows_drive_letter() {
+    let (_tmp, v) = fresh_vault();
+    // "1:1 with Bob.md" is an ordinary note name on unix and arrives from
+    // imported vaults all the time; only a real drive-letter shape is a path.
+    for ok in ["1:1 with Bob.md", "Q: open questions.md", "9:30 standup.md"] {
+        assert!(vault::check_rel_path(ok).is_ok(), "`{ok}` should be allowed");
+    }
+    // A real drive-relative path is rejected by the component walk on the
+    // platform where it means something.
+    #[cfg(windows)]
+    {
+        assert!(vault::check_rel_path("C:notes.md").is_err());
+        assert!(vault::check_rel_path("c:/Windows/system.ini").is_err());
+    }
+    // Absolute paths are refused everywhere.
+    assert!(vault::check_rel_path("/etc/passwd").is_err());
+}
+
+#[test]
+fn round_trips_a_note_whose_name_contains_a_colon() {
+    let (_tmp, v) = fresh_vault();
+    vault::write_page_body(&v, "1:1 with Bob.md", "notes\n").unwrap();
+    assert_eq!(vault::read_page_body(&v, "1:1 with Bob.md").unwrap(), "notes\n");
+    let listed: Vec<_> = vault::list_loose_pages(&v)
+        .unwrap()
+        .into_iter()
+        .map(|p| p.rel_path)
+        .collect();
+    assert!(listed.contains(&"1:1 with Bob.md".to_string()), "{listed:?}");
+}
+
+#[test]
+fn git_urls_that_carry_only_a_username_are_left_alone() {
+    // A bare username is not a secret. Mangling these corrupted the remote
+    // and overwrote the real PAT in the keychain.
+    for url in [
+        "ssh://git@github.com/me/notes.git",
+        "https://myuser@bitbucket.org/myuser/notes.git",
+        "https://myorg@dev.azure.com/myorg/proj/_git/notes",
+    ] {
+        let (out, secret) = git_sync::split_url_credentials(url);
+        assert_eq!(out, url, "URL must survive intact");
+        assert_eq!(secret, None, "no secret should be extracted from {url}");
+    }
+
+    // Real credentials are still lifted out.
+    let (out, secret) = git_sync::split_url_credentials("https://ghp_abc123@github.com/me/n.git");
+    assert_eq!(out, "https://github.com/me/n.git");
+    assert_eq!(secret.as_deref(), Some("ghp_abc123"));
+    let (out, secret) = git_sync::split_url_credentials("https://me:s3cret@github.com/me/n.git");
+    assert_eq!(out, "https://github.com/me/n.git");
+    assert_eq!(secret.as_deref(), Some("s3cret"));
+}

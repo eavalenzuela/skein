@@ -41,7 +41,8 @@ test.describe("Auto-tagging opt-in", () => {
     await page.getByRole("button", { name: /^settings/i }).first().click();
 
     const settings = page.getByRole("dialog", { name: /^settings$/i });
-    await expect(settings).toContainText(/never leave\s+this machine/i);
+    await expect(settings).toContainText(/live only on this\s+machine/i);
+    await expect(settings).toContainText(/no telemetry/i);
     const toggle = settings.locator('input[type="checkbox"]').first();
     await expect(toggle).not.toBeChecked();
     await toggle.check();

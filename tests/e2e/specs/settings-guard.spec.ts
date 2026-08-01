@@ -64,3 +64,36 @@ test("Escape still closes Settings after clicking a button that disables itself"
   await page.keyboard.press("Escape");
   await expect(settings).toHaveCount(0);
 });
+
+test("Ctrl+, goes through the unsaved-changes guard too", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator(".loading")).toHaveCount(0);
+  await page.getByRole("button", { name: /^settings/i }).first().click();
+  const settings = page.getByRole("dialog", { name: /^settings$/i });
+  await settings.locator(".grid > input[type=text]").first().fill("https://github.com/me/n.git");
+
+  // Ctrl+, is the advertised way in, so it must not be the one way out
+  // that discards edits silently.
+  await page.keyboard.press("Control+,");
+  await expect(page.getByRole("alertdialog", { name: /unsaved settings/i })).toBeVisible();
+  await expect(settings).toBeVisible();
+});
+
+test("one Escape dismisses only the frontmost dialog", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator(".loading")).toHaveCount(0);
+  await page.getByRole("button", { name: /^settings/i }).first().click();
+  const settings = page.getByRole("dialog", { name: /^settings$/i });
+  await expect(settings).toBeVisible();
+
+  await page.keyboard.press("Control+/");
+  const shortcuts = page.getByRole("dialog", { name: /keyboard shortcuts/i });
+  await expect(shortcuts).toBeVisible();
+
+  await page.keyboard.press("Escape");
+  await expect(shortcuts).toHaveCount(0);
+  await expect(settings).toBeVisible();
+
+  await page.keyboard.press("Escape");
+  await expect(settings).toHaveCount(0);
+});

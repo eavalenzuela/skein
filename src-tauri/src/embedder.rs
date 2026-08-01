@@ -100,15 +100,32 @@ pub fn normalize(v: &mut [f32]) {
     }
 }
 
+/// Cosine similarity. Vectors we store are unit-normalized, so this is a
+/// dot product in the common case — but it divides by the norms anyway so
+/// a vector that arrived from outside (an imported embeddings sidecar)
+/// can't win every ranking just by being large.
 pub fn cosine(a: &[f32], b: &[f32]) -> f32 {
     if a.len() != b.len() {
         return 0.0;
     }
-    let mut s = 0f32;
+    let mut dot = 0f32;
+    let mut na = 0f32;
+    let mut nb = 0f32;
     for i in 0..a.len() {
-        s += a[i] * b[i];
+        dot += a[i] * b[i];
+        na += a[i] * a[i];
+        nb += b[i] * b[i];
     }
-    s
+    let denom = na.sqrt() * nb.sqrt();
+    if denom <= f32::EPSILON || !denom.is_finite() {
+        return 0.0;
+    }
+    let s = dot / denom;
+    if s.is_finite() {
+        s
+    } else {
+        0.0
+    }
 }
 
 pub fn vec_to_bytes(v: &[f32]) -> Vec<u8> {

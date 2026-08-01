@@ -35,7 +35,7 @@
   );
 </script>
 
-<div class="skein theme-{theme}" style:--page-font={pageFont}>
+<div class="skein theme-{theme}" style:--page-font={`"${pageFont}"`}>
   <div class="win">
     <Titlebar {vault} />
     <div class="sk-body">

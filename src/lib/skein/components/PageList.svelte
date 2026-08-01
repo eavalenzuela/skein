@@ -10,6 +10,7 @@
   import { openTab } from "../tabs.svelte.js";
   import { vaultState, refreshVault } from "../vault.svelte.js";
   import { toastError, toastSuccess } from "../toasts.svelte.js";
+  import { forgetRecent } from "../recents.svelte.js";
   import ContextMenu, { type MenuItem } from "./ContextMenu.svelte";
   import { focusTrap } from "../focusTrap.js";
 
@@ -86,6 +87,7 @@
     try {
       const entry = await deletePage(target.rel_path);
       pendingDelete = null;
+      forgetRecent(target.rel_path);
       // Deletes are recoverable now, so offer the undo where the user is
       // looking rather than making them find a trash view.
       toastSuccess(`Moved "${target.title}" to trash`, undefined, {

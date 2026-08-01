@@ -25,7 +25,11 @@
     use:focusTrap
     onclick={(e) => e.stopPropagation()}
     onkeydown={(e) => {
-      if (e.key === "Escape") onClose();
+      if (e.key !== "Escape") return;
+      // Stop here: this overlay can sit on top of Settings, whose Escape
+      // handler is bound to the window. Without this one press closed both.
+      e.stopPropagation();
+      onClose();
     }}
   >
     <header>

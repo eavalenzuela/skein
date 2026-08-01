@@ -587,7 +587,20 @@ impl Index {
             mapped
                 .filter_map(|r| r.ok())
                 .filter(|(hash, model, vector)| {
-                    hash.len() == 32 && model == &model_name && vector.len() == expected_bytes
+                    if hash.len() != 32 || model != &model_name || vector.len() != expected_bytes {
+                        return false;
+                    }
+                    // Every vector we produce is unit-normalized, and
+                    // `cosine` is a bare dot product that relies on it. An
+                    // over-long imported vector would therefore outrank
+                    // every real note for every query — so check magnitude,
+                    // not just shape.
+                    let v = bytes_to_vec(vector);
+                    if !v.iter().all(|x| x.is_finite()) {
+                        return false;
+                    }
+                    let norm = v.iter().map(|x| x * x).sum::<f32>().sqrt();
+                    (norm - 1.0).abs() < 1e-3
                 })
                 .collect()
         };

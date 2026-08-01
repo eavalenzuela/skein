@@ -58,35 +58,66 @@ pub struct PullResult {
     pub conflicted: Vec<String>,
 }
 
-/// Split `scheme://user:secret@host/path` into the credential-free URL and
+/// Split `https://user:secret@host/path` into the credential-free URL and
 /// the embedded secret, if any.
 ///
 /// Pasting a tokenised clone URL is the most common way a PAT ends up in
 /// cleartext on disk (settings.json *and* .git/config). We keep the URL and
 /// hand the secret back so the caller can move it to the keychain.
+///
+/// Deliberately conservative: a bare `user@host` is left alone. Plenty of
+/// legitimate remotes carry a username and no secret — `ssh://git@github…`,
+/// `https://me@bitbucket.org/…`, `https://org@dev.azure.com/org/…` (where
+/// the org segment is required) — and treating the username as a token
+/// would corrupt the URL and overwrite the real key in the keychain.
 pub fn split_url_credentials(remote_url: &str) -> (String, Option<String>) {
     let Some(scheme_end) = remote_url.find("://") else {
         // scp-style (git@host:path) carries no secret.
         return (remote_url.to_string(), None);
     };
     let (scheme, rest) = remote_url.split_at(scheme_end + 3);
+    // Only http(s) URLs carry password-style credentials worth moving; ssh
+    // userinfo is a login name.
+    if !scheme.eq_ignore_ascii_case("http://") && !scheme.eq_ignore_ascii_case("https://") {
+        return (remote_url.to_string(), None);
+    }
     let Some(at) = rest.find('@') else {
         return (remote_url.to_string(), None);
     };
-    let host_part = &rest[at + 1..];
     // An '@' after the first '/' belongs to the path, not to userinfo.
     if rest[..at].contains('/') {
         return (remote_url.to_string(), None);
     }
     let userinfo = &rest[..at];
-    let secret = match userinfo.split_once(':') {
-        // `https://token@host` — GitHub accepts the PAT as the username.
-        None => Some(userinfo.to_string()),
-        Some((_, pass)) if !pass.is_empty() => Some(pass.to_string()),
-        Some((user, _)) => Some(user.to_string()),
-    };
-    let secret = secret.filter(|s| !s.is_empty());
-    (format!("{scheme}{host_part}"), secret)
+    let host_part = &rest[at + 1..];
+    match userinfo.split_once(':') {
+        // A password component is unambiguous — that's a secret.
+        Some((_, pass)) if !pass.is_empty() => {
+            (format!("{scheme}{host_part}"), Some(pass.to_string()))
+        }
+        // `https://ghp_xxx@host` — forge PATs used as the username. Match
+        // only the documented token prefixes, never a plain username.
+        None if is_forge_token(userinfo) => {
+            (format!("{scheme}{host_part}"), Some(userinfo.to_string()))
+        }
+        _ => (remote_url.to_string(), None),
+    }
+}
+
+/// Recognise the credential prefixes GitHub, GitLab and friends document,
+/// so a bare username is never mistaken for a secret.
+fn is_forge_token(s: &str) -> bool {
+    const PREFIXES: &[&str] = &[
+        "ghp_",
+        "gho_",
+        "ghu_",
+        "ghs_",
+        "ghr_",
+        "github_pat_",
+        "glpat-",
+        "glptt-",
+    ];
+    PREFIXES.iter().any(|p| s.starts_with(p))
 }
 
 pub fn ensure_repo_with_remote(vault_root: &Path, remote_url: &str) -> Result<()> {
@@ -94,6 +125,7 @@ pub fn ensure_repo_with_remote(vault_root: &Path, remote_url: &str) -> Result<()
         Ok(r) => r,
         Err(_) => Repository::init(vault_root).context("git init")?,
     };
+    ensure_skein_ignored(&repo)?;
     match repo.find_remote("origin") {
         Ok(r) => {
             if r.url() != Some(remote_url) {
@@ -350,12 +382,50 @@ pub fn push(
     Ok(())
 }
 
+/// Make sure `.skein/` is ignored by this repo.
+///
+/// Written to `.git/info/exclude` rather than a tracked `.gitignore` so we
+/// don't add a file to the user's vault that they'd have to sync. Contains
+/// the index, the embeddings sidecar, and the trash.
+fn ensure_skein_ignored(repo: &Repository) -> Result<()> {
+    let exclude = repo.path().join("info").join("exclude");
+    let current = std::fs::read_to_string(&exclude).unwrap_or_default();
+    if current.lines().any(|l| l.trim() == ".skein/") {
+        return Ok(());
+    }
+    if let Some(parent) = exclude.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let mut next = current;
+    if !next.is_empty() && !next.ends_with('\n') {
+        next.push('\n');
+    }
+    next.push_str("# Skein's private directory: index, embeddings, trash.\n.skein/\n");
+    std::fs::write(&exclude, next).context("writing .git/info/exclude")?;
+    Ok(())
+}
+
 /// Stage everything dirty + commit with the given message. Used by the
 /// "save & push" UX so users don't need a separate commit step.
 pub fn commit_all(vault_root: &Path, message: &str) -> Result<bool> {
     let repo = Repository::open(vault_root)?;
+    ensure_skein_ignored(&repo)?;
     let mut idx = repo.index()?;
-    idx.add_all(["*"], git2::IndexAddOption::DEFAULT, None)?;
+    // Exclude the app's private directory explicitly as well as via the
+    // ignore file: `.skein/trash/` holds pages the user deleted, and
+    // pushing those to a remote would put deleted notes in history
+    // permanently — the opposite of what "move to trash" promises.
+    idx.add_all(
+        ["*"],
+        git2::IndexAddOption::DEFAULT,
+        Some(&mut |path: &Path, _matched: &[u8]| {
+            if path.starts_with(".skein") {
+                1 // non-zero: skip this path
+            } else {
+                0
+            }
+        }),
+    )?;
     idx.write()?;
     let oid = idx.write_tree()?;
     let tree = repo.find_tree(oid)?;

@@ -30,6 +30,10 @@ const AUTO_DISMISS_MS: Record<ToastKind, number | null> = {
   error: null,
 };
 
+/** A toast carrying an action is the only route to that action, so it gets
+ * long enough to read the message, decide, and aim. */
+const ACTION_DISMISS_MS = 12000;
+
 export const toastState: { items: Toast[] } = $state({ items: [] });
 
 let nextId = 1;
@@ -51,11 +55,17 @@ export function pushToast(
 ): number {
   const id = nextId++;
   toastState.items = [...toastState.items, { id, kind, message, ...opts }];
-  // Cap the stack so a failing loop can't bury the UI.
-  if (toastState.items.length > 4) {
-    dismissToast(toastState.items[0].id);
+  // Cap the stack so a failing loop can't bury the UI. Evict the oldest
+  // toast that carries no action — an undo the user hasn't answered yet
+  // shouldn't vanish because something unrelated logged four messages.
+  while (toastState.items.length > 4) {
+    const victim =
+      toastState.items.find((t) => !t.action && t.id !== id) ??
+      toastState.items.find((t) => t.id !== id);
+    if (!victim) break;
+    dismissToast(victim.id);
   }
-  const ms = AUTO_DISMISS_MS[kind];
+  const ms = opts.action ? ACTION_DISMISS_MS : AUTO_DISMISS_MS[kind];
   if (ms !== null) {
     timers.set(
       id,
@@ -65,8 +75,8 @@ export function pushToast(
   return id;
 }
 
-export const toastInfo = (message: string, detail?: string) =>
-  pushToast("info", message, { detail });
+export const toastInfo = (message: string, detail?: string, action?: ToastAction) =>
+  pushToast("info", message, { detail, action });
 export const toastSuccess = (message: string, detail?: string, action?: ToastAction) =>
   pushToast("success", message, { detail, action });
 export const toastError = (message: string, detail?: string, action?: ToastAction) =>

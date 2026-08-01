@@ -15,7 +15,12 @@
     type Tab,
   } from "./tabs.svelte.js";
   import { searchUi, openSearch, closeSearch } from "./searchUi.svelte.js";
-  import { settingsUi, openSettings, closeSettings } from "./settingsUi.svelte.js";
+  import {
+    settingsUi,
+    openSettings,
+    closeSettings,
+    requestCloseSettings,
+  } from "./settingsUi.svelte.js";
   import { shortcutsUi, closeShortcuts, toggleShortcuts } from "./shortcutsUi.svelte.js";
   import { openTodayDaily } from "./vault.js";
   import Titlebar from "./components/Titlebar.svelte";
@@ -44,7 +49,9 @@
       openSearch();
     } else if ((e.ctrlKey || e.metaKey) && e.key === ",") {
       e.preventDefault();
-      if (settingsUi.open) closeSettings();
+      // Through the guard, not the raw close — Ctrl+, is the advertised
+      // way in, so it must not be the one way out that loses edits.
+      if (settingsUi.open) requestCloseSettings();
       else openSettings();
     } else if ((e.ctrlKey || e.metaKey) && (e.key === "d" || e.key === "D")) {
       e.preventDefault();
@@ -184,7 +191,7 @@
 <!-- Modals must render inside .skein so the theme CSS variables are
      in scope; otherwise they resolve to nothing and text comes out
      black on the dark backdrop. -->
-<div class="skein theme-{theme}" style:--page-font={pageFont}>
+<div class="skein theme-{theme}" style:--page-font={`"${pageFont}"`}>
   <div class="win">
     <Titlebar vault={vaultState.vault?.name ?? "Skein"} />
     <div class="sk-body">

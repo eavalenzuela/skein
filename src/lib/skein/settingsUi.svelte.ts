@@ -5,11 +5,28 @@ import { getSettings, setSettings } from "./settings.js";
 
 export const settingsUi: { open: boolean } = $state({ open: false });
 
+/** Set by SettingsModal while it is mounted, so every close path — the X,
+ * the backdrop, Escape, and Ctrl+, — goes through the same unsaved-changes
+ * check. Without this the shortcut discarded edits silently. */
+let closeGuard: (() => void) | null = null;
+
+export function registerSettingsCloseGuard(fn: (() => void) | null) {
+  closeGuard = fn;
+}
+
 export function openSettings() {
   settingsUi.open = true;
 }
+
+/** Close immediately, discarding anything unsaved. */
 export function closeSettings() {
   settingsUi.open = false;
+}
+
+/** Ask to close: prompts first when a section has unsaved edits. */
+export function requestCloseSettings() {
+  if (closeGuard) closeGuard();
+  else settingsUi.open = false;
 }
 
 /** Settings that gate behaviour elsewhere in the app. Kept here (rather
