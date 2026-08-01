@@ -362,13 +362,23 @@
   letter-spacing: 0.05em;
   color: oklch(from var(--spine-bg) calc(l + 0.55) calc(c * 0.3) h);
   text-transform: uppercase;
-  padding: 18px 4px 14px;
+  /* --spine-title-size is set per-spine from the title's length so a long
+     name shrinks to fit instead of having its last letter sliced off at
+     the spine edge (the full name is always in the tooltip). */
+  font-size: var(--spine-title-size, 10.5px);
+  padding: 14px 4px 10px;
   overflow: hidden;
   white-space: normal;
   text-shadow: 0 1px 0 oklch(0 0 0 / 0.4);
+  /* Belt and braces: if a name still doesn't fit, fade it out rather than
+     cutting a letter in half. Symmetric so it works either way up under
+     the 180° flip. */
+  mask-image: linear-gradient(to bottom, transparent 0, #000 8px, #000 calc(100% - 8px), transparent 100%);
 }
 .sk-spine .title.below-band {
-  padding-top: 36px;
+  /* rotate(180deg) flips the box, so padding-bottom is what clears the
+     cloth band at the visual top. */
+  padding-bottom: 22px;
 }
 
 .sk-shelf.style-abstract .sk-spine {

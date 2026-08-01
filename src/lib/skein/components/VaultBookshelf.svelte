@@ -41,12 +41,25 @@
       { kind: "add" as const },
     ];
     const out: Item[][] = [];
-    const rowCount = Math.max(2, Math.ceil(items.length / SLOTS_PER_ROW));
+    // design.md locks two rows so the shelf reads as furniture rather than
+    // a toolbar — but only pay for the second row once the first is full.
+    // A three-book vault on an 800px-tall window was spending ~28% of the
+    // window on one row of spines and one row of bare wood.
+    const used = Math.ceil(items.length / SLOTS_PER_ROW);
+    const rowCount = items.length > SLOTS_PER_ROW ? Math.max(2, used) : 1;
     for (let i = 0; i < rowCount; i++) {
       out.push(items.slice(i * SLOTS_PER_ROW, (i + 1) * SLOTS_PER_ROW));
     }
     return out;
   });
+
+  /** Empty slots for the remainder of a row. design.md: "Empty slots remain
+   * visible where rows aren't full, reinforcing the bookshelf metaphor" —
+   * without them the leftover width reads as dead space. */
+  function ghostSlots(row: Item[]): number[] {
+    const n = Math.max(0, SLOTS_PER_ROW - row.length);
+    return Array.from({ length: n }, (_v, i) => i);
+  }
 
   // ---- inline create + rename ----
   let creating = $state(false);
@@ -391,6 +404,9 @@
           {/if}
         {/if}
       {/each}
+      {#each ghostSlots(row) as gi (gi)}
+        <div class="ghost-slot" aria-hidden="true"></div>
+      {/each}
     </div>
   {/each}
   <div style:height="12px"></div>
@@ -465,24 +481,51 @@
     outline: 2px dashed var(--accent-edge, oklch(0.78 0.13 75));
     outline-offset: 2px;
   }
+  /* An empty place on the shelf: a shallow recess, deliberately quieter
+     than the "+" add slot so it reads as capacity, not as a button. */
+  .ghost-slot {
+    width: 26px;
+    height: 70px;
+    flex: 0 0 auto;
+    align-self: flex-end;
+    border-radius: 3px;
+    background: oklch(0 0 0 / 0.09);
+    box-shadow: inset 0 1px 2px oklch(0 0 0 / 0.18);
+  }
+  :global(.skein.theme-light) .ghost-slot {
+    background: oklch(0 0 0 / 0.07);
+    box-shadow: inset 0 1px 2px oklch(0 0 0 / 0.1);
+  }
+
+  /* Expressed in theme tokens: the previous hard-coded values were tuned
+     for the dark shelf and washed out to ~1.2:1 on the light oak. */
   .add-slot {
     display: flex;
     align-items: flex-end;
     width: 28px;
     height: 76px;
-    color: oklch(0.65 0.02 70);
-    background: oklch(0 0 0 / 0.12);
+    color: var(--ink-2);
+    background: oklch(0 0 0 / 0.14);
     border-radius: 4px;
-    border: 1px dashed oklch(0.5 0.012 70);
+    border: 1px dashed var(--wood-edge);
     justify-content: center;
     padding-bottom: 8px;
     font-size: 18px;
     line-height: 1;
     flex: 0 0 auto;
   }
+  :global(.skein.theme-light) .add-slot {
+    color: oklch(0.28 0.02 60);
+    background: oklch(1 0 0 / 0.22);
+  }
   .add-slot:hover {
-    color: oklch(0.92 0.012 80);
+    color: var(--ink);
     border-color: var(--accent-edge, oklch(0.78 0.13 75));
+    background: oklch(0 0 0 / 0.2);
+  }
+  :global(.skein.theme-light) .add-slot:hover {
+    color: oklch(0.18 0.02 60);
+    background: oklch(1 0 0 / 0.38);
   }
   .rename-slot {
     display: flex;
