@@ -9,7 +9,8 @@
   } from "./tweaks.svelte.js";
   import { embedderState, downloadModel } from "./embedder.svelte.js";
 
-  let open = $state(true);
+  // Collapsed by default — the expanded panel occludes the chat sidebar.
+  let open = $state(false);
 
   const themes: Theme[] = ["dark", "light"];
   const shelves: ShelfStyle[] = ["abstract", "suggestive", "tactile"];

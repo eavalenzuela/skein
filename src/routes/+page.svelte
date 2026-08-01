@@ -12,6 +12,11 @@
   let bootstrapped = $state(false);
   let designPreview = $state(false);
 
+  // Mockup tweak panel: dev builds only, and not under automation so
+  // e2e screenshots match what release users actually see.
+  const showDevControls =
+    import.meta.env.DEV && typeof navigator !== "undefined" && !navigator.webdriver;
+
   onMount(async () => {
     await Promise.all([bootstrapTweaks(), bootstrap(), bootstrapEmbedder(), bootstrapTitles()]);
     bootstrapped = true;
@@ -54,7 +59,9 @@
   {/if}
 </div>
 
-<DevControls />
+{#if showDevControls}
+  <DevControls />
+{/if}
 
 <style>
   :global(html, body) {

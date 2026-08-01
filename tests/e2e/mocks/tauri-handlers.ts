@@ -137,7 +137,7 @@ export function installMock(cfg: MockConfig): void {
       git_remote_url: null,
       git_branch: null,
       git_auth_kind: null,
-      chat_model: "sonnet-4.6",
+      chat_model: "claude-sonnet-4-6",
       chat_context_mode: "auto",
     },
     secrets: new Set<string>(),
@@ -392,8 +392,14 @@ export function installMock(cfg: MockConfig): void {
     git_commit_all: (): boolean => true,
 
     chat_send: (): string => {
+      // Mirrors the real backend contract: a single "chat-event" channel
+      // with turn_id-tagged started/token/done payloads (see chat.svelte.ts).
       const id = "turn-" + Math.random().toString(36).slice(2);
-      setTimeout(() => emit(`chat-turn-${id}`, { kind: "done", text: "Mock response" }), 50);
+      setTimeout(() => {
+        emit("chat-event", { turn_id: id, kind: "started" });
+        emit("chat-event", { turn_id: id, kind: "token", text: "Mock response" });
+        emit("chat-event", { turn_id: id, kind: "done" });
+      }, 50);
       return id;
     },
     chat_cancel: () => undefined,
