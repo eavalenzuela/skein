@@ -1,5 +1,5 @@
 mod archive;
-mod attachments;
+pub mod attachments;
 mod autotag;
 pub mod books;
 mod chat;
@@ -7,7 +7,7 @@ pub mod chunker;
 mod commands;
 mod daily;
 pub mod embedder;
-mod git_sync;
+pub mod git_sync;
 pub mod index;
 pub mod pages;
 mod secrets;

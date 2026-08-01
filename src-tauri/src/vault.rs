@@ -55,6 +55,90 @@ fn rel_string(root: &Path, full: &Path) -> Option<String> {
         .map(|s| s.replace('\\', "/"))
 }
 
+/// Reject a vault-relative path before it ever touches the filesystem.
+///
+/// Purely lexical, so it runs *before* `create_dir_all` and cannot leave
+/// stray directories behind on rejection. Everything that resolves a
+/// caller-supplied `rel_path` goes through here.
+pub fn check_rel_path(rel_path: &str) -> Result<()> {
+    if rel_path.trim().is_empty() {
+        anyhow::bail!("empty path");
+    }
+    if rel_path.contains('\0') {
+        anyhow::bail!("path contains a NUL byte");
+    }
+    let p = Path::new(rel_path);
+    if p.is_absolute() {
+        anyhow::bail!("path must be relative to the vault: {rel_path}");
+    }
+    for comp in p.components() {
+        match comp {
+            std::path::Component::Normal(_) => {}
+            std::path::Component::CurDir => {}
+            _ => anyhow::bail!("path escapes vault root: {rel_path}"),
+        }
+    }
+    // Windows drive-relative forms ("C:foo") parse as Normal on unix, so
+    // reject the syntax outright rather than per-platform.
+    if rel_path.len() >= 2 && rel_path.as_bytes()[1] == b':' {
+        anyhow::bail!("path escapes vault root: {rel_path}");
+    }
+    Ok(())
+}
+
+/// Resolve `rel_path` inside the vault, refusing traversal and symlinks.
+///
+/// `must_exist` distinguishes reads (target must already be a real file
+/// under the root) from writes (target may be new, but every existing
+/// ancestor must be a real directory under the root). Symlinks are
+/// rejected at every level including the leaf — a vault cloned from a
+/// hostile git remote can contain `Note.md -> ~/.bashrc`, and following
+/// it on write would clobber the target.
+pub fn resolve_in_vault(vault: &Vault, rel_path: &str, must_exist: bool) -> Result<PathBuf> {
+    check_rel_path(rel_path)?;
+    let full = vault.root.join(rel_path);
+
+    if let Ok(meta) = fs::symlink_metadata(&full) {
+        if meta.file_type().is_symlink() {
+            anyhow::bail!("path is a symlink, refusing to follow: {rel_path}");
+        }
+        let canonical = full
+            .canonicalize()
+            .with_context(|| format!("resolving {rel_path}"))?;
+        if !canonical.starts_with(&vault.root) {
+            anyhow::bail!("path escapes vault root: {rel_path}");
+        }
+        return Ok(canonical);
+    }
+
+    if must_exist {
+        anyhow::bail!("page not found: {rel_path}");
+    }
+
+    // Target doesn't exist yet. Verify the nearest existing ancestor is a
+    // real (non-symlinked) directory inside the vault, so a symlinked book
+    // folder can't redirect the write either.
+    let mut ancestor = full.parent();
+    while let Some(dir) = ancestor {
+        match fs::symlink_metadata(dir) {
+            Ok(meta) => {
+                if meta.file_type().is_symlink() {
+                    anyhow::bail!("path is a symlink, refusing to follow: {rel_path}");
+                }
+                let canonical = dir
+                    .canonicalize()
+                    .with_context(|| format!("resolving {rel_path}"))?;
+                if !canonical.starts_with(&vault.root) {
+                    anyhow::bail!("path escapes vault root: {rel_path}");
+                }
+                return Ok(full);
+            }
+            Err(_) => ancestor = dir.parent(),
+        }
+    }
+    anyhow::bail!("path escapes vault root: {rel_path}")
+}
+
 fn read_modified(path: &Path) -> i64 {
     fs::metadata(path)
         .and_then(|m| m.modified())
@@ -259,27 +343,19 @@ pub fn list_pages_in_book(vault: &Vault, book: &str) -> Result<Vec<Page>> {
 }
 
 pub fn read_page_body(vault: &Vault, rel_path: &str) -> Result<String> {
-    let full = vault.root.join(rel_path);
-    let canonical = full
-        .canonicalize()
-        .with_context(|| format!("page not found: {}", rel_path))?;
-    if !canonical.starts_with(&vault.root) {
-        anyhow::bail!("path escapes vault root: {}", rel_path);
-    }
-    Ok(fs::read_to_string(canonical)?)
+    let full = resolve_in_vault(vault, rel_path, true)?;
+    Ok(fs::read_to_string(full)?)
 }
 
 pub fn write_page_body(vault: &Vault, rel_path: &str, body: &str) -> Result<()> {
-    let full = vault.root.join(rel_path);
+    // Resolve (and reject traversal/symlinks) before creating anything, so a
+    // refused write leaves no directories behind.
+    let full = resolve_in_vault(vault, rel_path, false)?;
     let parent = full
         .parent()
         .with_context(|| format!("page path has no parent: {}", rel_path))?;
     if !parent.exists() {
         fs::create_dir_all(parent)?;
-    }
-    let canonical_parent = parent.canonicalize()?;
-    if !canonical_parent.starts_with(&vault.root) {
-        anyhow::bail!("path escapes vault root: {}", rel_path);
     }
     fs::write(&full, body)?;
     Ok(())

@@ -14,7 +14,7 @@ use std::path::PathBuf;
 use std::thread;
 use std::time::Duration;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::Result;
 use chrono::{DateTime, Datelike, Local, NaiveDate, Timelike};
 use parking_lot::Mutex;
 use serde::Serialize;
@@ -90,7 +90,9 @@ pub fn ensure_today(
     let template = template.unwrap_or(DEFAULT_TEMPLATE);
     let now = today_local();
     let rel = today_rel_path(book, &now);
-    let abs: PathBuf = vault.root.join(&rel);
+    // Guard before creating anything — the daily book name comes from
+    // settings and a bad value must not leave directories outside the vault.
+    let abs: PathBuf = crate::vault::resolve_in_vault(vault, &rel, false)?;
     if abs.exists() {
         return Ok(DailyResult {
             rel_path: rel,
@@ -100,13 +102,6 @@ pub fn ensure_today(
     if let Some(parent) = abs.parent() {
         if !parent.exists() {
             std::fs::create_dir_all(parent)?;
-        }
-        // Path-traversal guard.
-        let parent_canonical = parent
-            .canonicalize()
-            .with_context(|| format!("canonicalizing {}", parent.display()))?;
-        if !parent_canonical.starts_with(&vault.root) {
-            return Err(anyhow!("path escapes vault: {}", rel));
         }
     }
     let body = render_template(template, &now);

@@ -65,22 +65,39 @@ class ImageWidget extends WidgetType {
   }
 }
 
+/** Normalize a vault-relative path, resolving `.` and `..` segments.
+ * Returns null when the path climbs above the root. */
+export function normalizeVaultRelative(relPath: string): string | null {
+  const out: string[] = [];
+  for (const seg of relPath.split("/")) {
+    if (seg === "" || seg === ".") continue;
+    if (seg === "..") {
+      if (out.length === 0) return null;
+      out.pop();
+      continue;
+    }
+    out.push(seg);
+  }
+  return out.join("/");
+}
+
 function resolveImageSrc(ctx: PageContext, ref: string): string | null {
   // Skip remote refs — let the markdown source stand.
   if (/^[a-z][a-z0-9+.-]*:\/\//i.test(ref) || ref.startsWith("//")) {
     return null;
   }
-  let abs: string;
-  if (ref.startsWith("/")) {
-    abs = ref;
-  } else {
-    const slash = ctx.pageRelPath.lastIndexOf("/");
-    const folder = slash === -1 ? "" : ctx.pageRelPath.slice(0, slash + 1);
-    const root = ctx.vaultRoot.endsWith("/") ? ctx.vaultRoot : ctx.vaultRoot + "/";
-    abs = root + folder + ref;
+  // An image ref is vault-relative, always. Absolute refs and `..` climbs
+  // are how an imported note would point the webview at ~/.ssh/id_rsa.
+  if (ref.startsWith("/") || ref.startsWith("\\") || ref.includes("\0")) {
+    return null;
   }
+  const slash = ctx.pageRelPath.lastIndexOf("/");
+  const folder = slash === -1 ? "" : ctx.pageRelPath.slice(0, slash + 1);
+  const rel = normalizeVaultRelative(folder + ref.replace(/\\/g, "/"));
+  if (rel === null || rel === "") return null;
+  const root = ctx.vaultRoot.endsWith("/") ? ctx.vaultRoot : ctx.vaultRoot + "/";
   try {
-    return convertFileSrc(abs);
+    return convertFileSrc(root + rel);
   } catch {
     return null;
   }

@@ -66,6 +66,15 @@ fn install_vault<R: Runtime>(
 
     let watcher = watcher::spawn(app.clone(), vault.clone(), state.index.clone()).map_err(err)?;
 
+    // The asset protocol ships with an empty static scope; grant exactly the
+    // open vault so `asset://` can serve inline images without the webview
+    // being able to fetch anything else on the machine. Scopes are additive
+    // and Tauri offers no revoke, so a session that opens several vaults ends
+    // up with each of them allowed — still bounded by what the user opened.
+    app.asset_protocol_scope()
+        .allow_directory(&vault.root, true)
+        .map_err(err)?;
+
     let mut settings = settings::load(app);
     settings.vault_path = Some(vault.root.clone());
     settings::save(app, &settings).map_err(err)?;
@@ -560,12 +569,20 @@ pub fn git_set_remote<R: Runtime>(
     state: State<'_, AppState>,
 ) -> Result<(), String> {
     let vault = state.vault().ok_or("no vault open")?;
-    git_sync::ensure_repo_with_remote(&vault.root, &remote_url).map_err(err)?;
+    // A pasted `https://ghp_xxx@github.com/...` would otherwise persist the
+    // token to settings.json and .git/config in cleartext. Move it to the
+    // keychain and store only the bare URL.
+    let (clean_url, embedded_secret) = git_sync::split_url_credentials(&remote_url);
     let mut s = settings::load(&app);
-    s.git_remote_url = if remote_url.is_empty() {
+    if let Some(secret) = embedded_secret {
+        secrets::set("git_token", &secret).map_err(err)?;
+        s.git_auth_kind = Some("token".to_string());
+    }
+    git_sync::ensure_repo_with_remote(&vault.root, &clean_url).map_err(err)?;
+    s.git_remote_url = if clean_url.is_empty() {
         None
     } else {
-        Some(remote_url)
+        Some(clean_url)
     };
     settings::save(&app, &s).map_err(err)
 }

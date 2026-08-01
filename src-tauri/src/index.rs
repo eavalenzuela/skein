@@ -549,24 +549,61 @@ impl Index {
 
     /// Pre-populate the vector cache from a sidecar SQLite produced by
     /// `archive::export_vault`. Returns the number of rows imported.
+    /// The sidecar arrives inside a zip the user was handed, so it is
+    /// untrusted input rather than our own cache. It is read through a
+    /// separate read-only connection (never ATTACHed to the live index),
+    /// integrity-checked, and every row is validated: the vector must have
+    /// the active model's dimension, and the hash must be a well-formed
+    /// SHA-256. Rows that don't check out are dropped rather than trusted —
+    /// a poisoned vector would otherwise steer which notes get retrieved
+    /// into the chat's context.
     pub fn import_vector_cache(&mut self, sidecar_db: &std::path::Path) -> Result<usize> {
         if !sidecar_db.exists() {
             return Ok(0);
         }
-        let attach = sidecar_db
-            .to_str()
-            .ok_or_else(|| anyhow::anyhow!("non-utf8 sidecar path"))?
-            .replace('\'', "''");
-        self.conn.execute_batch(&format!(
-            "ATTACH DATABASE '{attach}' AS sc;
-             INSERT OR REPLACE INTO vector_cache (hash, model, vector)
-             SELECT hash, model, vector FROM sc.vectors;
-             DETACH DATABASE sc;"
-        ))?;
-        let n: usize =
-            self.conn
-                .query_row("SELECT COUNT(*) FROM vector_cache", [], |r| r.get(0))?;
-        Ok(n)
+        let model_name = self.embedder.name().to_string();
+        let expected_bytes = self.embedder.dim() * 4;
+
+        let src = Connection::open_with_flags(
+            sidecar_db,
+            OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        )?;
+        let check: String = src
+            .query_row("PRAGMA quick_check", [], |r| r.get(0))
+            .unwrap_or_else(|_| "failed".to_string());
+        if check != "ok" {
+            anyhow::bail!("embeddings sidecar failed its integrity check");
+        }
+
+        let rows: Vec<(Vec<u8>, String, Vec<u8>)> = {
+            let mut stmt = src.prepare("SELECT hash, model, vector FROM vectors")?;
+            let mapped = stmt.query_map([], |r| {
+                Ok((
+                    r.get::<_, Vec<u8>>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, Vec<u8>>(2)?,
+                ))
+            })?;
+            mapped
+                .filter_map(|r| r.ok())
+                .filter(|(hash, model, vector)| {
+                    hash.len() == 32 && model == &model_name && vector.len() == expected_bytes
+                })
+                .collect()
+        };
+        drop(src);
+
+        let tx = self.conn.transaction()?;
+        {
+            let mut put = tx.prepare(
+                "INSERT OR REPLACE INTO vector_cache (hash, model, vector) VALUES (?1, ?2, ?3)",
+            )?;
+            for (hash, model, vector) in &rows {
+                put.execute(params![hash, model, vector])?;
+            }
+        }
+        tx.commit()?;
+        Ok(rows.len())
     }
 
     /// Cosine over the chunk-level vectors, optionally excluding chunks

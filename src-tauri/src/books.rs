@@ -97,13 +97,27 @@ fn validate_name(name: &str) -> Result<()> {
     Ok(())
 }
 
-fn book_dir(vault: &Vault, name: &str) -> PathBuf {
-    vault.root.join(name)
+/// Resolve a book folder. Always validates the name first — an unchecked
+/// name reaching `remove_dir_all` would delete arbitrary directories.
+fn book_dir(vault: &Vault, name: &str) -> Result<PathBuf> {
+    validate_name(name)?;
+    crate::vault::check_rel_path(name)?;
+    Ok(vault.root.join(name))
+}
+
+/// Book folder that must already exist: additionally rejects symlinks and
+/// anything resolving outside the vault.
+fn existing_book_dir(vault: &Vault, name: &str) -> Result<PathBuf> {
+    validate_name(name)?;
+    let dir = crate::vault::resolve_in_vault(vault, name, true)?;
+    if !dir.is_dir() {
+        return Err(anyhow!("book `{name}` not found"));
+    }
+    Ok(dir)
 }
 
 pub fn create_book(vault: &Vault, name: &str) -> Result<()> {
-    validate_name(name)?;
-    let dir = book_dir(vault, name);
+    let dir = book_dir(vault, name)?;
     if dir.exists() {
         return Err(anyhow!("a folder named `{name}` already exists"));
     }
@@ -115,12 +129,8 @@ pub fn rename_book(vault: &Vault, old: &str, new: &str) -> Result<()> {
     if old == new {
         return Ok(());
     }
-    validate_name(new)?;
-    let from = book_dir(vault, old);
-    let to = book_dir(vault, new);
-    if !from.is_dir() {
-        return Err(anyhow!("book `{old}` not found"));
-    }
+    let from = existing_book_dir(vault, old)?;
+    let to = book_dir(vault, new)?;
     if to.exists() {
         return Err(anyhow!("a folder named `{new}` already exists"));
     }
@@ -156,10 +166,7 @@ pub fn delete_book(
     name: &str,
     also_delete_pages: bool,
 ) -> Result<DeleteResult> {
-    let dir = book_dir(vault, name);
-    if !dir.is_dir() {
-        return Err(anyhow!("book `{name}` not found"));
-    }
+    let dir = existing_book_dir(vault, name)?;
 
     let mut result = DeleteResult::default();
 

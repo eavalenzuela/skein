@@ -16,23 +16,26 @@ use std::path::{Path, PathBuf};
 use anyhow::{anyhow, Context, Result};
 use walkdir::WalkDir;
 
-use crate::vault::Vault;
+use crate::vault::{resolve_in_vault, Vault};
 
 const FORBIDDEN_STEMS: &[&str] = &[".", "..", ""];
 
-pub fn create_page(vault: &Vault, book: Option<&str>, title: &str) -> Result<String> {
-    let stem = sanitize_stem(title)?;
+/// Resolve a book folder (or the vault root when `book` is None) with the
+/// same containment guarantees as page paths.
+fn book_dir(vault: &Vault, book: Option<&str>) -> Result<PathBuf> {
     let dir = match book {
-        Some(b) => vault.root.join(b),
+        Some(b) => resolve_in_vault(vault, b, true)?,
         None => vault.root.clone(),
     };
     if !dir.is_dir() {
         return Err(anyhow!("destination folder not found"));
     }
-    let canonical_dir = dir.canonicalize()?;
-    if !canonical_dir.starts_with(&vault.root) {
-        return Err(anyhow!("path escapes vault root"));
-    }
+    Ok(dir)
+}
+
+pub fn create_page(vault: &Vault, book: Option<&str>, title: &str) -> Result<String> {
+    let stem = sanitize_stem(title)?;
+    let canonical_dir = book_dir(vault, book)?;
     let final_stem = unique_stem(&canonical_dir, &stem);
     let target = canonical_dir.join(format!("{final_stem}.md"));
     let body = format!("---\ntitle: {final_stem}\n---\n\n");
@@ -43,7 +46,7 @@ pub fn create_page(vault: &Vault, book: Option<&str>, title: &str) -> Result<Str
 
 pub fn rename_page(vault: &Vault, old_rel: &str, new_title: &str) -> Result<String> {
     let new_stem = sanitize_stem(new_title)?;
-    let old_full = vault.root.join(old_rel);
+    let old_full = resolve_in_vault(vault, old_rel, true)?;
     if !old_full.is_file() {
         return Err(anyhow!("page not found: {old_rel}"));
     }
@@ -74,21 +77,11 @@ pub fn rename_page(vault: &Vault, old_rel: &str, new_title: &str) -> Result<Stri
 /// keep working — unless the destination already has a page with that stem,
 /// in which case the usual " (N)" suffix applies and links are rewritten.
 pub fn move_page(vault: &Vault, rel: &str, dest_book: Option<&str>) -> Result<String> {
-    let old_full = vault.root.join(rel);
+    let old_full = resolve_in_vault(vault, rel, true)?;
     if !old_full.is_file() {
         return Err(anyhow!("page not found: {rel}"));
     }
-    let dest_dir = match dest_book {
-        Some(b) => vault.root.join(b),
-        None => vault.root.clone(),
-    };
-    if !dest_dir.is_dir() {
-        return Err(anyhow!("destination folder not found"));
-    }
-    let canonical_dir = dest_dir.canonicalize()?;
-    if !canonical_dir.starts_with(&vault.root) {
-        return Err(anyhow!("path escapes vault root"));
-    }
+    let canonical_dir = book_dir(vault, dest_book)?;
     let stem = old_full
         .file_stem()
         .and_then(|s| s.to_str())
@@ -113,13 +106,9 @@ pub fn move_page(vault: &Vault, rel: &str, dest_book: Option<&str>) -> Result<St
 }
 
 pub fn delete_page(vault: &Vault, rel: &str) -> Result<()> {
-    let full = vault.root.join(rel);
-    if !full.is_file() {
+    let canonical = resolve_in_vault(vault, rel, true)?;
+    if !canonical.is_file() {
         return Err(anyhow!("page not found: {rel}"));
-    }
-    let canonical = full.canonicalize()?;
-    if !canonical.starts_with(&vault.root) {
-        return Err(anyhow!("path escapes vault root"));
     }
     fs::remove_file(&canonical)
         .with_context(|| format!("removing {}", canonical.display()))?;

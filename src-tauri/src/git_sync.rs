@@ -58,6 +58,37 @@ pub struct PullResult {
     pub conflicted: Vec<String>,
 }
 
+/// Split `scheme://user:secret@host/path` into the credential-free URL and
+/// the embedded secret, if any.
+///
+/// Pasting a tokenised clone URL is the most common way a PAT ends up in
+/// cleartext on disk (settings.json *and* .git/config). We keep the URL and
+/// hand the secret back so the caller can move it to the keychain.
+pub fn split_url_credentials(remote_url: &str) -> (String, Option<String>) {
+    let Some(scheme_end) = remote_url.find("://") else {
+        // scp-style (git@host:path) carries no secret.
+        return (remote_url.to_string(), None);
+    };
+    let (scheme, rest) = remote_url.split_at(scheme_end + 3);
+    let Some(at) = rest.find('@') else {
+        return (remote_url.to_string(), None);
+    };
+    let host_part = &rest[at + 1..];
+    // An '@' after the first '/' belongs to the path, not to userinfo.
+    if rest[..at].contains('/') {
+        return (remote_url.to_string(), None);
+    }
+    let userinfo = &rest[..at];
+    let secret = match userinfo.split_once(':') {
+        // `https://token@host` — GitHub accepts the PAT as the username.
+        None => Some(userinfo.to_string()),
+        Some((_, pass)) if !pass.is_empty() => Some(pass.to_string()),
+        Some((user, _)) => Some(user.to_string()),
+    };
+    let secret = secret.filter(|s| !s.is_empty());
+    (format!("{scheme}{host_part}"), secret)
+}
+
 pub fn ensure_repo_with_remote(vault_root: &Path, remote_url: &str) -> Result<()> {
     let repo = match Repository::open(vault_root) {
         Ok(r) => r,
@@ -164,8 +195,16 @@ fn install_credentials<'cb>(
     auth: AuthKind,
     token: Option<String>,
 ) {
-    cb.credentials(move |_url, username, allowed| match auth {
+    cb.credentials(move |url, username, allowed| match auth {
         AuthKind::Token => {
+            // libgit2 hands us whatever URL it is talking to *now* — which
+            // after a redirect may not be the remote the user configured.
+            // Only ever hand a PAT to an https endpoint.
+            if !url.starts_with("https://") {
+                return Err(git2::Error::from_str(
+                    "refusing to send the git token over a non-https connection",
+                ));
+            }
             let t = token.clone().unwrap_or_default();
             // GitHub-style PAT: any non-empty username works; password is the
             // token. We use "git" to play well with most forges.
