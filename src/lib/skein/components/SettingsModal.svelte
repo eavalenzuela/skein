@@ -14,8 +14,16 @@
     open as openVaultPath,
     openFromArchive,
     close as closeVault,
+    refreshVault,
   } from "../vault.svelte.js";
-  import { exportVault } from "../vault.js";
+  import {
+    exportVault,
+    listTrash,
+    emptyTrash,
+    restoreTrashedPage,
+    type TrashEntry,
+  } from "../vault.js";
+  import { toastSuccess } from "../toasts.svelte.js";
   import {
     hasSecret,
     setSecret,
@@ -247,7 +255,51 @@
     void loadDaily();
     void loadGitConfig();
     void refreshGitStatus();
+    void loadTrash();
   });
+
+  // --- Trash ---------------------------------------------------------
+  let trashItems = $state<TrashEntry[]>([]);
+  let trashBusy = $state(false);
+  let trashError = $state<string | null>(null);
+
+  async function loadTrash() {
+    if (!vaultState.vault) return;
+    try {
+      trashItems = await listTrash();
+    } catch (e) {
+      trashError = String(e);
+    }
+  }
+
+  async function restoreOne(id: string) {
+    trashBusy = true;
+    trashError = null;
+    try {
+      const rel = await restoreTrashedPage(id);
+      await refreshVault();
+      await loadTrash();
+      toastSuccess(`Restored ${rel}`);
+    } catch (e) {
+      trashError = String(e);
+    } finally {
+      trashBusy = false;
+    }
+  }
+
+  async function emptyAll() {
+    trashBusy = true;
+    trashError = null;
+    try {
+      const n = await emptyTrash();
+      await loadTrash();
+      toastSuccess(`Emptied the trash`, `${n} ${n === 1 ? "page" : "pages"} removed for good`);
+    } catch (e) {
+      trashError = String(e);
+    } finally {
+      trashBusy = false;
+    }
+  }
 
   async function saveSecret(name: SecretName, value: string) {
     secretError = null;
@@ -411,6 +463,44 @@
       </section>
 
       {#if vaultState.vault}
+        <section>
+          <h3>Trash</h3>
+          {#if trashItems.length === 0}
+            <p class="muted">
+              Nothing in the trash. Deleted pages land here and are removed
+              for good after 30 days.
+            </p>
+          {:else}
+            <ul class="trash-list">
+              {#each trashItems as t (t.id)}
+                <li>
+                  <div class="kv">
+                    <div class="k">{t.title}</div>
+                    <div class="v mono">{t.rel_path}</div>
+                  </div>
+                  <button onclick={() => void restoreOne(t.id)} disabled={trashBusy}>
+                    restore
+                  </button>
+                </li>
+              {/each}
+            </ul>
+            <div class="row">
+              <p class="muted">
+                {trashItems.length}
+                {trashItems.length === 1 ? "page" : "pages"} recoverable
+              </p>
+              <div class="actions">
+                <button class="danger" onclick={() => void emptyAll()} disabled={trashBusy}>
+                  empty trash
+                </button>
+              </div>
+            </div>
+          {/if}
+          {#if trashError}
+            <p class="danger">{trashError}</p>
+          {/if}
+        </section>
+
         <section>
           <h3>Sync</h3>
           <div class="grid">
@@ -903,6 +993,24 @@
   .git-fresh {
     margin-bottom: 4px;
     font-size: 11px;
+  }
+  .trash-list {
+    list-style: none;
+    margin: 0 0 8px;
+    padding: 0;
+    max-height: 180px;
+    overflow-y: auto;
+  }
+  .trash-list li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 5px 0;
+    border-bottom: 1px solid var(--chrome-edge);
+  }
+  .trash-list li:last-child {
+    border-bottom: 0;
   }
   .git-age {
     color: var(--ink-3);

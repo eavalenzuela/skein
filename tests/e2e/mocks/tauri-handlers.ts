@@ -18,6 +18,7 @@ import type {
   RelatedHit,
   BacklinkHit,
   DeleteBookResult,
+  TrashEntry,
 } from "../../../src/lib/skein/vault";
 import type { Settings, GitStatus, GitPullResult } from "../../../src/lib/skein/settings";
 
@@ -33,6 +34,7 @@ export interface MockState {
   bookOrder: string[];
   pages: Map<string, Page>;
   pageBodies: Map<string, string>;
+  trash: Map<string, { entry: TrashEntry; page: Page }>;
   settings: Settings;
   secrets: Set<string>;
   eventListeners: Map<string, Map<number, (e: { event: string; payload: unknown; id: number }) => void>>;
@@ -125,6 +127,7 @@ export function installMock(cfg: MockConfig): void {
       ],
     ]),
     pageBodies: new Map<string, string>(),
+    trash: new Map<string, { entry: TrashEntry; page: Page }>(),
     settings: {
       vault_path: cfg.vaultRoot,
       theme: "warm",
@@ -279,15 +282,41 @@ export function installMock(cfg: MockConfig): void {
       emit("vault-changed", null);
       return newRel;
     },
-    delete_page_command: ({ relPath }) => {
+    delete_page_command: ({ relPath }): TrashEntry => {
       const r = String(relPath);
       const p = state.pages.get(r);
-      if (p?.book) {
+      if (!p) throw new Error("not found");
+      if (p.book) {
         const b = state.books.find((bb) => bb.name === p.book);
         if (b) b.page_count = Math.max(0, b.page_count - 1);
       }
       state.pages.delete(r);
+      const entry: TrashEntry = {
+        id: "trash-" + state.nextEventId++,
+        rel_path: r,
+        title: p.title,
+        deleted_at: 1700000000,
+      };
+      state.trash.set(entry.id, { entry, page: p });
       emit("vault-changed", null);
+      return entry;
+    },
+    restore_trashed_page: ({ id }): string => {
+      const rec = state.trash.get(String(id));
+      if (!rec) throw new Error("this item is no longer in the trash");
+      state.trash.delete(String(id));
+      state.pages.set(rec.entry.rel_path, rec.page);
+      const b = state.books.find((bb) => bb.name === rec.page.book);
+      if (b) b.page_count += 1;
+      emit("vault-changed", null);
+      return rec.entry.rel_path;
+    },
+    list_trash: (): TrashEntry[] =>
+      [...state.trash.values()].map((r) => r.entry).sort((a, b) => b.deleted_at - a.deleted_at),
+    empty_trash: (): number => {
+      const n = state.trash.size;
+      state.trash.clear();
+      return n;
     },
     list_loose_pages: (): Page[] =>
       [...state.pages.values()].filter((p) => p.book === null),

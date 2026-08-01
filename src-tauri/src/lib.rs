@@ -13,6 +13,7 @@ pub mod pages;
 mod secrets;
 mod settings;
 mod state;
+pub mod trash;
 pub mod vault;
 mod watcher;
 
@@ -77,6 +78,9 @@ pub fn run() {
             commands::rename_page,
             commands::move_page,
             commands::delete_page_command,
+            commands::restore_trashed_page,
+            commands::list_trash,
+            commands::empty_trash,
             commands::list_loose_pages,
             commands::list_pages_in_book,
             commands::read_page,

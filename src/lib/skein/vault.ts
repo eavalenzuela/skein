@@ -43,8 +43,21 @@ export const createPage = (book: string | null, title: string) =>
   invoke<string>("create_page", { book, title });
 export const renamePage = (relPath: string, newTitle: string) =>
   invoke<string>("rename_page", { relPath, newTitle });
+export interface TrashEntry {
+  id: string;
+  rel_path: string;
+  title: string;
+  deleted_at: number;
+}
+
+/** Move a page to the vault-local trash (`.skein/trash/`). Returns the
+ * entry, whose `id` restores it. */
 export const deletePage = (relPath: string) =>
-  invoke<void>("delete_page_command", { relPath });
+  invoke<TrashEntry>("delete_page_command", { relPath });
+export const restoreTrashedPage = (id: string) =>
+  invoke<string>("restore_trashed_page", { id });
+export const listTrash = () => invoke<TrashEntry[]>("list_trash");
+export const emptyTrash = () => invoke<number>("empty_trash");
 /** Move a page into `book`, or to the vault root (Folio) when `book` is null.
  * Returns the new rel_path. */
 export const movePage = (relPath: string, book: string | null) =>

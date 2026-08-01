@@ -1,8 +1,15 @@
 <script lang="ts">
   import type { Page } from "../vault.js";
-  import { createPage, renamePage, deletePage, movePage } from "../vault.js";
+  import {
+    createPage,
+    renamePage,
+    deletePage,
+    movePage,
+    restoreTrashedPage,
+  } from "../vault.js";
   import { openTab } from "../tabs.svelte.js";
-  import { vaultState } from "../vault.svelte.js";
+  import { vaultState, refreshVault } from "../vault.svelte.js";
+  import { toastError, toastSuccess } from "../toasts.svelte.js";
   import ContextMenu, { type MenuItem } from "./ContextMenu.svelte";
   import { focusTrap } from "../focusTrap.js";
 
@@ -77,8 +84,21 @@
     deleteError = null;
     const target = pendingDelete;
     try {
-      await deletePage(target.rel_path);
+      const entry = await deletePage(target.rel_path);
       pendingDelete = null;
+      // Deletes are recoverable now, so offer the undo where the user is
+      // looking rather than making them find a trash view.
+      toastSuccess(`Moved "${target.title}" to trash`, undefined, {
+        label: "Undo",
+        run: async () => {
+          try {
+            await restoreTrashedPage(entry.id);
+            await refreshVault();
+          } catch (e) {
+            toastError("Couldn't restore the page", String(e));
+          }
+        },
+      });
     } catch (e) {
       deleteError = String(e);
     } finally {
@@ -291,12 +311,15 @@
       use:focusTrap
       onclick={(e) => e.stopPropagation()}
     >
-      <h3>Delete "{pendingDelete.title}"?</h3>
-      <p>This removes the file from disk and drops it from the index.</p>
+      <h3>Move "{pendingDelete.title}" to trash?</h3>
+      <p>
+        The page leaves the vault and the index. You can put it back from the
+        undo prompt, or from Settings → Trash for the next 30 days.
+      </p>
       <div class="actions">
         <button onclick={() => (pendingDelete = null)}>Cancel</button>
         <button class="danger" onclick={confirmDelete} disabled={deleting}>
-          Delete
+          Move to trash
         </button>
       </div>
       {#if deleteError}<p class="err">{deleteError}</p>{/if}

@@ -17,6 +17,7 @@ use crate::index::{self, BacklinkHit, Index, PageTitle, RelatedHit, SearchHit};
 use crate::secrets;
 use crate::settings::{self, Settings, SettingsPatch};
 use crate::state::AppState;
+use crate::trash;
 use crate::vault::{self, Book, Page, Vault};
 use crate::watcher;
 
@@ -235,14 +236,45 @@ pub fn delete_page_command<R: Runtime>(
     app: AppHandle<R>,
     rel_path: String,
     state: State<'_, AppState>,
-) -> Result<(), String> {
+) -> Result<trash::TrashEntry, String> {
     let vault = state.vault().ok_or("no vault open")?;
-    pages::delete_page(&vault, &rel_path).map_err(err)?;
+    // Deletes go to the vault-local trash so they can be undone. `.skein/`
+    // is already excluded from indexing, export and git.
+    let entry = trash::trash_page(&vault, &rel_path).map_err(err)?;
     if let Some(idx) = state.index.lock().as_mut() {
         let _ = idx.delete_page(&rel_path);
     }
     let _ = app.emit("vault-changed", ());
-    Ok(())
+    Ok(entry)
+}
+
+#[tauri::command]
+pub fn restore_trashed_page<R: Runtime>(
+    app: AppHandle<R>,
+    id: String,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    let vault = state.vault().ok_or("no vault open")?;
+    let rel = trash::restore(&vault, &id).map_err(err)?;
+    if let Some(data) = vault::read_page_data(&vault, &vault.root.join(&rel)) {
+        if let Some(idx) = state.index.lock().as_mut() {
+            let _ = idx.upsert_page(&data);
+        }
+    }
+    let _ = app.emit("vault-changed", ());
+    Ok(rel)
+}
+
+#[tauri::command]
+pub fn list_trash(state: State<'_, AppState>) -> Result<Vec<trash::TrashEntry>, String> {
+    let vault = state.vault().ok_or("no vault open")?;
+    Ok(trash::list(&vault))
+}
+
+#[tauri::command]
+pub fn empty_trash(state: State<'_, AppState>) -> Result<usize, String> {
+    let vault = state.vault().ok_or("no vault open")?;
+    trash::empty(&vault).map_err(err)
 }
 
 #[tauri::command]

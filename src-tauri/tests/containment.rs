@@ -209,3 +209,58 @@ fn git_remote_url_credentials_are_split_out() {
     assert_eq!(url, "git@github.com:me/notes.git");
     assert_eq!(secret, None);
 }
+
+#[test]
+fn deleted_pages_go_to_trash_and_come_back() {
+    let (_tmp, v) = fresh_vault();
+    let rel = pages::create_page(&v, None, "keepme").unwrap();
+    vault::write_page_body(&v, &rel, "important content\n").unwrap();
+
+    let entry = trash::trash_page(&v, &rel).unwrap();
+    assert!(!v.root.join(&rel).exists(), "page should leave its old path");
+    assert_eq!(trash::list(&v).len(), 1);
+
+    let restored = trash::restore(&v, &entry.id).unwrap();
+    assert_eq!(restored, rel);
+    assert_eq!(
+        fs::read_to_string(v.root.join(&rel)).unwrap(),
+        "important content\n"
+    );
+    assert!(trash::list(&v).is_empty(), "restore should consume the entry");
+}
+
+#[test]
+fn restore_does_not_overwrite_a_page_recreated_at_the_same_path() {
+    let (_tmp, v) = fresh_vault();
+    let rel = pages::create_page(&v, None, "note").unwrap();
+    vault::write_page_body(&v, &rel, "old\n").unwrap();
+    let entry = trash::trash_page(&v, &rel).unwrap();
+
+    // User writes a new page at the same path before hitting undo.
+    vault::write_page_body(&v, &rel, "new\n").unwrap();
+    let restored = trash::restore(&v, &entry.id).unwrap();
+
+    assert_ne!(restored, rel);
+    assert_eq!(fs::read_to_string(v.root.join(&rel)).unwrap(), "new\n");
+    assert_eq!(fs::read_to_string(v.root.join(&restored)).unwrap(), "old\n");
+}
+
+#[test]
+fn trash_ids_cannot_escape_the_trash_folder() {
+    let (_tmp, v) = fresh_vault();
+    for bad in ["../../etc/passwd", "..", "a/b", "x.json"] {
+        assert!(trash::restore(&v, bad).is_err(), "`{bad}` must be rejected");
+    }
+}
+
+#[test]
+fn emptying_the_trash_clears_everything() {
+    let (_tmp, v) = fresh_vault();
+    for name in ["one", "two"] {
+        let rel = pages::create_page(&v, None, name).unwrap();
+        trash::trash_page(&v, &rel).unwrap();
+    }
+    assert_eq!(trash::list(&v).len(), 2);
+    assert_eq!(trash::empty(&v).unwrap(), 2);
+    assert!(trash::list(&v).is_empty());
+}

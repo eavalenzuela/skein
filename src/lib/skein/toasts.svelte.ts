@@ -67,8 +67,8 @@ export function pushToast(
 
 export const toastInfo = (message: string, detail?: string) =>
   pushToast("info", message, { detail });
-export const toastSuccess = (message: string, detail?: string) =>
-  pushToast("success", message, { detail });
+export const toastSuccess = (message: string, detail?: string, action?: ToastAction) =>
+  pushToast("success", message, { detail, action });
 export const toastError = (message: string, detail?: string, action?: ToastAction) =>
   pushToast("error", message, { detail, action });
 
