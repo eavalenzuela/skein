@@ -20,6 +20,17 @@ pub struct Settings {
     pub git_auth_kind: Option<String>,
     pub chat_model: Option<String>,
     pub chat_context_mode: Option<String>,
+    /// Whether editing a page may send its text to the Anthropic API for
+    /// tag suggestions. Off unless the user turns it on — it is the only
+    /// feature that uploads note content without the user asking for it
+    /// in the moment.
+    pub auto_tag: Option<bool>,
+}
+
+impl Settings {
+    pub fn auto_tag_enabled(&self) -> bool {
+        self.auto_tag.unwrap_or(false)
+    }
 }
 
 #[derive(Deserialize, Default, Clone, Debug)]
@@ -36,6 +47,7 @@ pub struct SettingsPatch {
     pub git_auth_kind: Option<String>,
     pub chat_model: Option<String>,
     pub chat_context_mode: Option<String>,
+    pub auto_tag: Option<bool>,
 }
 
 impl Settings {
@@ -76,6 +88,9 @@ impl Settings {
         }
         if let Some(v) = patch.chat_context_mode {
             self.chat_context_mode = if v.is_empty() { None } else { Some(v) };
+        }
+        if let Some(v) = patch.auto_tag {
+            self.auto_tag = Some(v);
         }
     }
 }

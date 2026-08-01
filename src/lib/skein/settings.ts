@@ -16,6 +16,7 @@ export interface Settings {
   git_auth_kind: string | null;
   chat_model: string | null;
   chat_context_mode: string | null;
+  auto_tag: boolean | null;
 }
 
 export interface SettingsPatch {
@@ -31,6 +32,7 @@ export interface SettingsPatch {
   git_auth_kind?: string;
   chat_model?: string;
   chat_context_mode?: string;
+  auto_tag?: boolean;
 }
 
 export const getSettings = () => invoke<Settings>("get_settings");

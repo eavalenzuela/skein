@@ -24,6 +24,7 @@
     type TrashEntry,
   } from "../vault.js";
   import { toastSuccess } from "../toasts.svelte.js";
+  import { settingsState, setAutoTag } from "../settingsUi.svelte.js";
   import {
     hasSecret,
     setSecret,
@@ -258,6 +259,19 @@
     void loadTrash();
   });
 
+  // --- Privacy -------------------------------------------------------
+  let autoTagError = $state<string | null>(null);
+
+  async function toggleAutoTag(on: boolean) {
+    autoTagError = null;
+    try {
+      await setAutoTag(on);
+    } catch (e) {
+      autoTagError = String(e);
+      settingsState.autoTag = !on;
+    }
+  }
+
   // --- Trash ---------------------------------------------------------
   let trashItems = $state<TrashEntry[]>([]);
   let trashBusy = $state(false);
@@ -459,6 +473,38 @@
           {#if restoreError}
             <p class="danger">{restoreError}</p>
           {/if}
+        {/if}
+      </section>
+
+      <section>
+        <h3>Privacy</h3>
+        <p class="muted">
+          Skein is local-first: your vault, index and embeddings never leave
+          this machine. Two features do send text to Anthropic — the chat
+          sidebar, when you send a message, and auto-tagging, below.
+        </p>
+        <div class="row">
+          <div class="kv">
+            <div class="k">Auto-suggest tags</div>
+            <div class="v muted wrap">
+              Sends a page's title and text (up to 6 KB) to Anthropic a few
+              seconds after you stop typing, and bills your API key. Off by
+              default.
+            </div>
+          </div>
+          <div class="actions">
+            <label class="opt">
+              <input
+                type="checkbox"
+                checked={settingsState.autoTag}
+                onchange={(e) => void toggleAutoTag(e.currentTarget.checked)}
+              />
+              {settingsState.autoTag ? "on" : "off"}
+            </label>
+          </div>
+        </div>
+        {#if autoTagError}
+          <p class="danger">{autoTagError}</p>
         {/if}
       </section>
 
@@ -880,6 +926,12 @@
   .kv .v.mono {
     font-family: "JetBrains Mono", monospace;
     font-size: 11px;
+  }
+  /* `.v` truncates to one line for paths; explanatory copy needs to wrap. */
+  .kv .v.wrap {
+    white-space: normal;
+    line-height: 1.45;
+    max-width: 62ch;
   }
   .actions {
     display: flex;

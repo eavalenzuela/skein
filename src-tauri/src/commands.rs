@@ -492,10 +492,16 @@ pub fn clear_secret(name: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn suggest_tags(
+pub async fn suggest_tags<R: Runtime>(
+    app: AppHandle<R>,
     rel_path: String,
     state: State<'_, AppState>,
 ) -> Result<Vec<String>, String> {
+    // Enforced here rather than only in the UI: this is the one path that
+    // uploads note text without the user asking for it in the moment.
+    if !settings::load(&app).auto_tag_enabled() {
+        return Err("auto-tagging is off (enable it in Settings → Privacy)".to_string());
+    }
     let api_key =
         secrets::read("anthropic_api_key").ok_or_else(|| "no Anthropic API key set".to_string())?;
     let vault = state.vault().ok_or("no vault open")?;

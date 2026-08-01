@@ -17,6 +17,7 @@ import {
   listPagesInBook,
 } from "./vault.js";
 import { toastError } from "./toasts.svelte.js";
+import { noteRecent } from "./recents.svelte.js";
 
 /** "user" — opened explicitly (click, drag, search hit). Sticky.
  *  "auto" — loaded as a sibling for navigation when its book became the
@@ -203,6 +204,7 @@ export async function openTab(
     }
   }
   if (kind === "user") {
+    noteRecent({ rel_path: page.rel_path, title: page.title });
     await syncBookContextFromState();
     persistSession();
   }

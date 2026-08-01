@@ -8,6 +8,7 @@
   import { vaultState, bootstrap } from "$lib/skein/vault.svelte.js";
   import { bootstrap as bootstrapEmbedder } from "$lib/skein/embedder.svelte.js";
   import { bootstrap as bootstrapTitles } from "$lib/skein/titles.svelte.js";
+  import { bootstrapSettings } from "$lib/skein/settingsUi.svelte.js";
 
   let bootstrapped = $state(false);
   let designPreview = $state(false);
@@ -18,7 +19,13 @@
     import.meta.env.DEV && typeof navigator !== "undefined" && !navigator.webdriver;
 
   onMount(async () => {
-    await Promise.all([bootstrapTweaks(), bootstrap(), bootstrapEmbedder(), bootstrapTitles()]);
+    await Promise.all([
+      bootstrapTweaks(),
+      bootstrap(),
+      bootstrapEmbedder(),
+      bootstrapTitles(),
+      bootstrapSettings(),
+    ]);
     bootstrapped = true;
   });
 

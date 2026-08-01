@@ -142,6 +142,7 @@ export function installMock(cfg: MockConfig): void {
       git_auth_kind: null,
       chat_model: "claude-sonnet-4-6",
       chat_context_mode: "auto",
+      auto_tag: false,
     },
     secrets: new Set<string>(),
     eventListeners: new Map(),

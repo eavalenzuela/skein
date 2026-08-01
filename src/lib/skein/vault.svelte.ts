@@ -15,6 +15,7 @@ import {
   type Page,
 } from "./vault.js";
 import { reconcileExternal, beginTabSession, endTabSession } from "./tabs.svelte.js";
+import { startRecents, endRecents } from "./recents.svelte.js";
 
 export const vaultState: {
   vault: Vault | null;
@@ -70,6 +71,7 @@ export async function bootstrap() {
       vaultState.vault = v;
       await refreshVaultLists();
       await attachWatcher();
+      startRecents(v.root);
       await beginTabSession(v.root);
     }
   } catch (e) {
@@ -89,6 +91,7 @@ export async function open(path: string) {
     vaultState.pagesInActiveBook = [];
     await refreshVaultLists();
     await attachWatcher();
+    startRecents(v.root);
     await beginTabSession(v.root);
   } catch (e) {
     vaultState.error = String(e);
@@ -107,6 +110,7 @@ export async function openFromArchive(archivePath: string, destDir: string) {
     vaultState.pagesInActiveBook = [];
     await refreshVaultLists();
     await attachWatcher();
+    startRecents(v.root);
     await beginTabSession(v.root);
   } catch (e) {
     vaultState.error = String(e);
@@ -119,6 +123,7 @@ export async function openFromArchive(archivePath: string, destDir: string) {
 export async function close() {
   await closeVault();
   endTabSession();
+  endRecents();
   if (unlisten) {
     unlisten();
     unlisten = null;

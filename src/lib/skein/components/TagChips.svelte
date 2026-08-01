@@ -3,6 +3,7 @@
   import type { Tab } from "../tabs.svelte.js";
   import { suggestTags, applyTag, dismissTag } from "../vault.js";
   import { hasSecret } from "../settings.js";
+  import { settingsState } from "../settingsUi.svelte.js";
   import { parseFrontmatterTags } from "../frontmatter.js";
 
   interface Props {
@@ -34,6 +35,9 @@
 
   async function runSuggest() {
     if (!tab) return;
+    // Opt-in: a key configured for chat must not silently start uploading
+    // every note the user edits. The backend enforces this too.
+    if (!settingsState.autoTag) return;
     if (!(await ensureKey())) return;
     if (tab.body.trim().length < 40) return; // not worth a call
     error = null;
@@ -61,6 +65,7 @@
     }
     lastBodyForPath = path;
     clearTimer();
+    if (!settingsState.autoTag) return;
     timer = setTimeout(runSuggest, SUGGEST_DEBOUNCE_MS);
   });
 
@@ -90,7 +95,7 @@
   }
 </script>
 
-{#if keyConfigured && (loading || suggestions.length > 0 || error)}
+{#if settingsState.autoTag && keyConfigured && (loading || suggestions.length > 0 || error)}
   <div class="tag-chips" role="region" aria-label="Tag suggestions">
     <span class="label">Suggested tags</span>
     {#if loading && suggestions.length === 0}
