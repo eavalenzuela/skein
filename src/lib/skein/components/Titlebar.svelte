@@ -3,7 +3,8 @@
   import { openSettings } from "../settingsUi.svelte.js";
   import { openTodayDaily, createPage, rebuildIndex } from "../vault.js";
   import { openTab, closeTab, tabsState } from "../tabs.svelte.js";
-  import { close as closeVault, vaultState } from "../vault.svelte.js";
+  import { close as closeVault, vaultState, refreshVault } from "../vault.svelte.js";
+  import { askForPageTitle } from "./NewPagePrompt.svelte";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { openShortcuts } from "../shortcutsUi.svelte.js";
@@ -32,10 +33,15 @@
   }
 
   async function newPagePrompt() {
-    const title = window.prompt("Title for the new page:");
-    if (!title?.trim()) return;
-    const rel = await createPage(null, title.trim());
-    await openTab({ rel_path: rel, title: title.trim() });
+    const title = await askForPageTitle(null);
+    if (!title) return;
+    try {
+      const rel = await createPage(null, title);
+      await refreshVault();
+      await openTab({ rel_path: rel, title });
+    } catch (e) {
+      toastError("Couldn't create the page", String(e));
+    }
   }
 
   function activeTabRel(): string | null {

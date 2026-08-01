@@ -16,6 +16,8 @@
   import Folio from "./Folio.svelte";
   import ContextMenu, { type MenuItem } from "./ContextMenu.svelte";
   import { focusTrap } from "../focusTrap.js";
+  import { toastError } from "../toasts.svelte.js";
+  import { askForPageTitle } from "./NewPagePrompt.svelte";
 
   interface Props {
     style: ShelfStyle;
@@ -163,14 +165,14 @@
   }
 
   async function newPageIn(book: string) {
-    const title = prompt(`New page title in "${book}":`);
-    if (!title || !title.trim()) return;
+    const title = await askForPageTitle(book);
+    if (!title) return;
     try {
-      const rel = await createPage(book, title.trim());
+      const rel = await createPage(book, title);
       const stem = rel.split("/").pop()?.replace(/\.md$/, "") ?? rel;
       await openTab({ rel_path: rel, title: stem });
     } catch (e) {
-      console.error("createPage", e);
+      toastError("Couldn't create the page", String(e));
     }
   }
 

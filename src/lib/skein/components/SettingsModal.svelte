@@ -76,10 +76,45 @@
       if (s.daily_book) dailyBook = s.daily_book;
       if (s.daily_template) dailyTemplate = s.daily_template;
       if (s.daily_reminder_time) dailyReminderTime = s.daily_reminder_time;
+      markDailyClean();
     } catch (e) {
       dailyError = String(e);
     }
   }
+
+  // The Appearance section applies instantly, but Daily notes and Sync need
+  // an explicit save. Closing the modal used to throw those edits away
+  // silently — an Escape press, trained by the palette, could lose a git
+  // remote or a rewritten template. Track a baseline and confirm instead.
+  let dailyBaseline = $state("");
+  let gitBaseline = $state("");
+
+  const dailySnapshot = () => JSON.stringify([dailyBook, dailyTemplate, dailyReminderTime]);
+  const gitSnapshot = () => JSON.stringify([gitRemote, gitBranch, gitAuthKind, gitCommitMsg]);
+
+  function markDailyClean() {
+    dailyBaseline = dailySnapshot();
+  }
+  function markGitClean() {
+    gitBaseline = gitSnapshot();
+  }
+
+  let dailyDirty = $derived(dailyBaseline !== "" && dailySnapshot() !== dailyBaseline);
+  let gitDirty = $derived(gitBaseline !== "" && gitSnapshot() !== gitBaseline);
+  let dirtySections = $derived(
+    [dailyDirty ? "Daily notes" : null, gitDirty ? "Sync" : null].filter(
+      (s): s is string => s !== null,
+    ),
+  );
+
+  function requestClose() {
+    if (dirtySections.length === 0) {
+      onClose();
+      return;
+    }
+    confirmingClose = true;
+  }
+  let confirmingClose = $state(false);
 
   async function saveDaily() {
     dailySaving = true;
@@ -101,6 +136,7 @@
         daily_template: dailyTemplate,
         daily_reminder_time: dailyReminderTime.trim(),
       });
+      markDailyClean();
     } catch (e) {
       dailyError = String(e);
     } finally {
@@ -162,6 +198,7 @@
       if (s.git_auth_kind) {
         gitAuthKind = (s.git_auth_kind as typeof gitAuthKind) || "none";
       }
+      markGitClean();
     } catch (e) {
       gitError = String(e);
     }
@@ -197,6 +234,7 @@
       }
       await refreshGitStatus();
       gitMessage = "Saved.";
+      markGitClean();
     } catch (e) {
       gitError = String(e);
     } finally {
@@ -401,9 +439,22 @@
   }
 </script>
 
+<!-- Escape is bound at the window, not the overlay: clicking a button that
+     then disables itself (save, pull, push) moves focus to <body>, and a
+     handler on the overlay never sees the keypress — leaving the modal
+     unclosable from the keyboard. -->
+<svelte:window
+  onkeydown={(e) => {
+    if (e.key !== "Escape") return;
+    e.preventDefault();
+    if (confirmingClose) confirmingClose = false;
+    else requestClose();
+  }}
+/>
+
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="overlay" onclick={onClose} onkeydown={(e) => e.key === "Escape" && onClose()}>
+<div class="overlay" onclick={requestClose}>
   <div
     class="modal"
     role="dialog"
@@ -415,7 +466,7 @@
   >
     <header>
       <h2>Settings</h2>
-      <button class="close" onclick={onClose} aria-label="Close">×</button>
+      <button class="close" onclick={requestClose} aria-label="Close">×</button>
     </header>
 
     <div class="body">
@@ -825,9 +876,78 @@
       </section>
     </div>
   </div>
+
+  {#if confirmingClose}
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <div class="confirm-scrim" onclick={(e) => e.stopPropagation()}>
+      <div
+        class="confirm"
+        role="alertdialog"
+        aria-modal="true"
+        aria-label="Unsaved settings"
+        tabindex="-1"
+        use:focusTrap
+      >
+        <h3>Unsaved changes</h3>
+        <p>
+          {dirtySections.join(" and ")}
+          {dirtySections.length === 1 ? "has" : "have"} edits that haven't been saved. Closing now discards
+          {dirtySections.length === 1 ? "them" : "them"}.
+        </p>
+        <div class="actions">
+          <button onclick={() => (confirmingClose = false)}>Keep editing</button>
+          <button
+            class="danger"
+            onclick={() => {
+              confirmingClose = false;
+              onClose();
+            }}>Discard</button
+          >
+        </div>
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>
+  .confirm-scrim {
+    position: absolute;
+    inset: 0;
+    background: oklch(0 0 0 / 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+  }
+  .confirm {
+    width: min(380px, 90%);
+    background: var(--chrome);
+    border: 1px solid var(--chrome-edge);
+    border-radius: 10px;
+    padding: 18px;
+    box-shadow: 0 20px 50px -18px oklch(0 0 0 / 0.7);
+    outline: none;
+  }
+  .confirm h3 {
+    margin: 0 0 6px;
+    font-family: var(--page-font, "Source Serif 4"), serif;
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--ink);
+    text-transform: none;
+    letter-spacing: normal;
+  }
+  .confirm p {
+    margin: 0 0 14px;
+    font-size: 12.5px;
+    color: var(--ink-3);
+    line-height: 1.45;
+  }
+  .confirm .actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
   .overlay {
     position: fixed;
     inset: 0;

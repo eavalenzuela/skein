@@ -32,6 +32,7 @@
   import LinkedFromStrip from "./components/LinkedFromStrip.svelte";
   import SettingsModal from "./components/SettingsModal.svelte";
   import ShortcutsOverlay from "./components/ShortcutsOverlay.svelte";
+  import NewPagePrompt, { newPagePrompt } from "./components/NewPagePrompt.svelte";
 
   function onKeydown(e: KeyboardEvent) {
     if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K")) {
@@ -291,6 +292,10 @@
 
   {#if shortcutsUi.open}
     <ShortcutsOverlay onClose={closeShortcuts} />
+  {/if}
+
+  {#if newPagePrompt.open}
+    <NewPagePrompt />
   {/if}
 </div>
 
