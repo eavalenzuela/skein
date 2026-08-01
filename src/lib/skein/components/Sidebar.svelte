@@ -6,10 +6,14 @@
     send,
     cancelActive,
     attachChatBus,
+    clearConversation,
     CHAT_MODELS,
     type ContextMode,
   } from "../chat.svelte.js";
-  import { activeTab } from "../tabs.svelte.js";
+  import { activeTab, openTab, bookOf } from "../tabs.svelte.js";
+  import { createPage, writePage } from "../vault.js";
+  import { refreshVault } from "../vault.svelte.js";
+  import { toastError, toastSuccess } from "../toasts.svelte.js";
   import { hasSecret, getSettings, setSettings } from "../settings.js";
   import { openSettings } from "../settingsUi.svelte.js";
   import { titlesState } from "../titles.svelte.js";
@@ -206,6 +210,51 @@
   let modelMenu = $state<{ x: number; y: number } | null>(null);
   let contextMenu = $state<{ x: number; y: number } | null>(null);
 
+  let savingTranscript = $state(false);
+
+  function newConversation() {
+    // A long transcript is re-sent whole on every turn, so this is a cost
+    // control as much as a tidy-up.
+    if (chatState.messages.length === 0) return;
+    clearConversation();
+  }
+
+  /** Write the conversation into the vault as a normal page, so an answer
+   * worth keeping becomes a first-class note rather than scrollback. */
+  async function saveTranscript() {
+    if (chatState.messages.length === 0 || savingTranscript) return;
+    savingTranscript = true;
+    try {
+      const stamp = new Date().toISOString().slice(0, 16).replace("T", " ").replace(":", "-");
+      const title = `Chat ${stamp}`;
+      const book = activeTab() ? bookOf(activeTab()!.rel_path) : null;
+      const rel = await createPage(book, title);
+      const body = [
+        "---",
+        `title: ${title}`,
+        "tags:",
+        "  - chat",
+        "---",
+        "",
+        ...chatState.messages
+          .filter((m) => m.content.trim())
+          .map((m) =>
+            m.role === "user"
+              ? `**You:** ${m.content.trim()}\n`
+              : `**${modelLabel(chatState.model)}:** ${m.content.trim()}\n`,
+          ),
+      ].join("\n");
+      await writePage(rel, body);
+      await refreshVault();
+      await openTab({ rel_path: rel, title });
+      toastSuccess("Saved the conversation", rel);
+    } catch (e) {
+      toastError("Couldn't save the conversation", String(e));
+    } finally {
+      savingTranscript = false;
+    }
+  }
+
   function anchorOf(e: MouseEvent): { x: number; y: number } {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     return { x: rect.left, y: rect.bottom + 3 };
@@ -318,6 +367,31 @@
       {/if}
       {#if prefsError}
         <span class="prefs-error" title={prefsError} aria-live="polite">! save failed</span>
+      {/if}
+      {#if chatState.messages.length > 0}
+        <button
+          class="side-act"
+          onclick={() => void saveTranscript()}
+          disabled={savingTranscript}
+          title="Save this conversation as a page in the vault"
+          aria-label="Save conversation to a note"
+        >
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3">
+            <path d="M3 2h8l2 2v10H3z" />
+            <path d="M5.5 2v4h5V2M5.5 14v-4h5v4" />
+          </svg>
+        </button>
+        <button
+          class="side-act"
+          onclick={newConversation}
+          disabled={chatState.busy}
+          title="Start a new conversation"
+          aria-label="New conversation"
+        >
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">
+            <path d="M8 3.5v9M3.5 8h9" />
+          </svg>
+        </button>
       {/if}
     </div>
 
@@ -476,6 +550,32 @@
     font-style: italic;
     align-self: center;
     animation: fade-in 120ms ease-in;
+  }
+  .side-act {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    color: var(--ink-3);
+    cursor: pointer;
+    padding: 0;
+  }
+  .side-act:hover:not(:disabled) {
+    color: var(--ink);
+    border-color: var(--chrome-edge);
+    background: oklch(1 0 0 / 0.06);
+  }
+  .side-act:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+  .side-act:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
   }
   .prefs-error {
     font-size: 10.5px;
