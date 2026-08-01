@@ -10,10 +10,20 @@ The visual metaphor is a study: a bookshelf of "books" (folders of pages) above 
 
 - Markdown vault on disk (books = folders, pages = `.md` files) with a disposable SQLite index, live file watcher, and YAML frontmatter.
 - CodeMirror 6 editor with Obsidian-style live preview, split view via pinned tabs, dirty indicators, and session restore of open tabs.
-- Full-text search (FTS5) and semantic related-notes (local BGE-small ONNX embeddings, hash-bag fallback, content-hash vector cache); command palette with `:` commands and `#` tag search.
+- Full-text search (FTS5) and semantic related-notes (local BGE-small ONNX embeddings, hash-bag fallback, content-hash vector cache); command palette opening on recent pages, with `:` commands and `#` tag search.
 - `[[wikilinks]]` with autocomplete, backlinks panel, and rename-safe link rewriting.
-- Claude chat sidebar with RAG context modes, streaming, stop-generation, and drag-to-insert into the editor; auto-tag suggestions via Haiku.
+- Claude chat sidebar with RAG context modes, streaming, stop-generation, drag-to-insert into the editor, and "save this conversation as a page".
 - Daily notes with templates and OS reminders, paste/drop image attachments, zip export/restore with an embeddings sidecar, and optional git sync (libgit2).
+- Deletes go to a vault-local trash (`.skein/trash/`, 30-day retention) with an undo prompt and a Settings panel; failed reads and saves surface as toasts instead of failing silently.
+- Press <kbd>Ctrl</kbd>+<kbd>/</kbd> for the keyboard-shortcut overlay.
+
+### Privacy
+
+Everything — the vault, the search index, and the embeddings — stays on
+your machine. Two features send text to Anthropic, both under your control:
+the **chat sidebar**, when you send a message, and **auto-suggested tags**,
+which is **off by default** and enabled in Settings → Privacy. There is no
+telemetry.
 
 ## Stack
 
@@ -25,7 +35,7 @@ The visual metaphor is a study: a bookshelf of "books" (folders of pages) above 
 
 Prerequisites:
 
-- **Linux:** `webkit2gtk-4.1`, `libsoup-3.0-dev`, `librsvg2-dev`, `libssl-dev`, `build-essential`. See [Tauri's Linux prerequisites](https://v2.tauri.app/start/prerequisites/).
+- **Linux:** `webkit2gtk-4.1`, `libsoup-3.0-dev`, `librsvg2-dev`, `libssl-dev`, `build-essential`. See [Tauri's Linux prerequisites](https://v2.tauri.app/start/prerequisites/). If you can't install those system packages but have the GNOME flatpak SDK, `source scripts/rust-env.sh` points `pkg-config` at it, which is enough to compile and test the Rust crate.
 - **Windows:** Visual Studio Build Tools with C++ workload, WebView2 (preinstalled on Windows 11).
 - **All platforms:** Node 20+ and Rust (via [rustup](https://rustup.rs)).
 
@@ -55,7 +65,7 @@ npm run tauri dev
 - `npm run format` — Prettier.
 - `npm run test:unit` — Vitest unit tests.
 - `npm run test:e2e` — Playwright e2e suite against a typed Tauri mock (includes visual regression; refresh snapshots with `npx playwright test --update-snapshots` after intentional UI changes).
-- `npm run test:rust` — Rust unit + integration tests.
+- `npm run test:rust` — Rust unit + integration tests (includes `src-tauri/tests/containment.rs`, the path-traversal / symlink-escape regression suite).
 - `npm run smoke` — the full pre-push gate (type-check → lint → unit → Rust → e2e → debug Tauri build); `npm run smoke:fast` skips the Tauri build.
 
 ## License

@@ -26,6 +26,11 @@ done
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
+# Point pkg-config at a GNOME flatpak SDK when the distro's GTK/WebKit dev
+# packages aren't installed. No-op when they are.
+# shellcheck source=./rust-env.sh
+source "$ROOT/scripts/rust-env.sh"
+
 step() { printf '\n\033[1;36m▶ %s\033[0m\n' "$*"; }
 
 step "1/6  npm run check"
