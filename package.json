@@ -23,6 +23,9 @@
     "smoke": "bash scripts/smoke.sh",
     "smoke:fast": "bash scripts/smoke.sh --skip-tauri"
   },
+  "overrides": {
+    "cookie": "^0.7.0"
+  },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.1",
     "@codemirror/commands": "^6.10.3",

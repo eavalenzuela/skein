@@ -282,7 +282,6 @@ fn listing_a_book_cannot_enumerate_directories_outside_the_vault() {
 
 #[test]
 fn a_colon_in_a_note_name_is_not_a_windows_drive_letter() {
-    let (_tmp, v) = fresh_vault();
     // "1:1 with Bob.md" is an ordinary note name on unix and arrives from
     // imported vaults all the time; only a real drive-letter shape is a path.
     for ok in ["1:1 with Bob.md", "Q: open questions.md", "9:30 standup.md"] {
